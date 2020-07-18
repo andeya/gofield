@@ -10,23 +10,25 @@ import (
 	"github.com/henrylee2cn/gofield"
 )
 
-type P1 struct {
-	A int
-	b int
-	P2
-}
-type P2 struct {
-	C int
-	d int
-	*P3
-}
-type P3 struct {
-	E int
-	f *int
-	g **int
-}
+type (
+	P1 struct {
+		A int
+		b int
+		P2
+	}
+	P2 struct {
+		C int
+		d int
+		*P3
+	}
+	P3 struct {
+		E int
+		f *int
+		g **int
+	}
+)
 
-func BenchmarkAccess(b *testing.B) {
+func BenchmarkGofield(b *testing.B) {
 	var p P1
 	s, err := gofield.Access(p)
 	assert.EqualError(b, err, "type is not struct pointer")
