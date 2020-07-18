@@ -2,8 +2,23 @@
 
 High-performance struct field accessor based on unsafe pointers.
 
-## Example
+## Compare
 
+**`gofield` is simple to use and has twice the performance of `reflect`**
+
+- benchmark result
+```sh
+goos: darwin
+goarch: amd64
+pkg: github.com/henrylee2cn/gofield
+BenchmarkGofield
+BenchmarkGofield-4   	23960054	        49.1 ns/op
+BenchmarkReflect
+BenchmarkReflect-4   	12137930	       101 ns/op
+PASS
+```
+
+- gofield example
 ```go
 func BenchmarkGofield(b *testing.B) {
 	var p P1
@@ -36,17 +51,56 @@ func BenchmarkGofield(b *testing.B) {
 }
 ```
 
-## Benchmark
-
-```sh
-goos: darwin
-goarch: amd64
-pkg: github.com/henrylee2cn/gofield
-BenchmarkGofield
-BenchmarkGofield-4   	23960054	        49.1 ns/op
-BenchmarkReflect
-BenchmarkReflect-4   	12137930	       101 ns/op
-PASS
+- reflect example
+```go
+func BenchmarkReflect(b *testing.B) {
+	var p P1
+	s := reflect.ValueOf(&p)
+	b.ResetTimer()
+	s = s.Elem()
+	assert.Equal(b, 3, s.NumField())
+	var valInt int
+	var setVal func(v reflect.Value)
+	setVal = func(s reflect.Value) {
+		num := s.NumField()
+		for i := 0; i < num; i++ {
+			f := s.Field(i)
+			for f.Kind() == reflect.Ptr {
+				if f.IsNil() {
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).Elem().
+						Set(reflect.New(f.Type().Elem()))
+				}
+				f = f.Elem()
+				if f.Kind() == reflect.Ptr && f.IsNil() {
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr()))
+				}
+			}
+			switch f.Kind() {
+			case reflect.Int:
+				if f.CanSet() {
+					f.SetInt(int64(valInt))
+				} else {
+					p := (*int)(unsafe.Pointer(f.UnsafeAddr()))
+					*p = valInt
+				}
+				valInt++
+			case reflect.Struct:
+				valInt++
+				setVal(f)
+			}
+		}
+	}
+	for i := 0; i < b.N; i++ {
+		valInt = 0
+		setVal(s)
+	}
+	b.StopTimer()
+	assert.Equal(b, 0, p.A)
+	assert.Equal(b, 1, p.b)
+	assert.Equal(b, 3, p.C)
+	assert.Equal(b, 4, p.d)
+	assert.Equal(b, 6, p.E)
+	assert.Equal(b, 7, *p.f)
+	assert.Equal(b, 8, **p.g)
+}
 ```
-
-[testing](./access_test.go)
