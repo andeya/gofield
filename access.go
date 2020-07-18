@@ -62,39 +62,49 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Unlock()
 }
 
-func Access(structPtr interface{}) (*Struct, error) {
-	var val reflect.Value
+func Prepare(structPtr interface{}) error {
+	var val ameda.Value
 	switch j := structPtr.(type) {
 	case reflect.Value:
-		if j.Kind() != reflect.Ptr || j.Elem().Kind() != reflect.Struct {
-			return nil, errors.New("type is not struct pointer")
-		}
-		val = j
+		val = ameda.ValueFrom2(&j)
 	default:
-		val = reflect.ValueOf(j)
-		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-			return nil, errors.New("type is not struct pointer")
-		}
+		val = ameda.ValueOf(structPtr)
 	}
-	tid := ameda.ValueFrom(val).RuntimeTypeID()
-	sTyp, ok := store.load(tid)
-	if !ok {
-		var err error
-		sTyp, err = newStructType(structPtr)
-		if err != nil {
-			return nil, err
-		}
-		store.store(sTyp)
+	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+		return errors.New("type is not struct pointer")
 	}
-	return newStruct(sTyp, val), nil
+	tid := val.RuntimeTypeID()
+	_, ok := store.load(tid)
+	if ok {
+		return nil
+	}
+	sTyp := newStructType(structPtr)
+	store.store(sTyp)
+	return nil
 }
 
-func newStruct(typ *StructType, val reflect.Value) *Struct {
+func Access(structPtr interface{}) *Struct {
+	var val ameda.Value
+	switch j := structPtr.(type) {
+	case reflect.Value:
+		val = ameda.ValueFrom2(&j)
+	default:
+		val = ameda.ValueOf(structPtr)
+	}
+	tid := val.RuntimeTypeID()
+	sTyp, ok := store.load(tid)
+	if !ok {
+		sTyp = newStructType(structPtr)
+		store.store(sTyp)
+	}
+	return newStruct(sTyp, val.Pointer())
+}
+
+func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	return &Struct{
 		typ: typ,
 		value: &Value{
-			elemVal: val.Elem(),
-			elemPtr: val.Pointer(),
+			elemPtr: elemPtr,
 		},
 		fieldValues: make([]*Value, len(typ.fields)),
 	}
@@ -111,6 +121,16 @@ func (s *Struct) FieldType(id int) *FieldType {
 		return nil
 	}
 	return s.typ.fields[id]
+}
+
+func (s *Struct) Filter(fn func(t *FieldType) bool) []int {
+	list := make([]int, 0, s.NumField())
+	for id, field := range s.typ.fields {
+		if fn(field) {
+			list = append(list, id)
+		}
+	}
+	return list
 }
 
 func (s *Struct) FieldValue(id int) reflect.Value {
@@ -141,11 +161,11 @@ func (f *FieldType) init(s *Struct) uintptr {
 	if f.parent == nil {
 		return s.value.elemPtr // the original caller ensures that it has been initialized
 	}
-	pptr := f.parent.init(s)
 	v := s.fieldValues[f.id]
 	if v != nil {
 		return v.elemPtr
 	}
+	pptr := f.parent.init(s)
 	ptr := pptr + f.Offset
 	valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(ptr))
 	if f.ptrNum > 0 {
@@ -190,7 +210,7 @@ func (f *FieldType) UnderlyingKind() reflect.Kind {
 
 const maxDeep = 16
 
-func newStructType(structPtr interface{}) (*StructType, error) {
+func newStructType(structPtr interface{}) *StructType {
 	v, ok := structPtr.(reflect.Value)
 	if !ok {
 		v = reflect.ValueOf(structPtr)
@@ -201,12 +221,13 @@ func newStructType(structPtr interface{}) (*StructType, error) {
 		elemType: structTyp,
 		fields:   make([]*FieldType, 0, 8),
 	}
-	return sTyp, sTyp.parseFields(&FieldType{}, structTyp)
+	sTyp.parseFields(&FieldType{}, structTyp)
+	return sTyp
 }
 
-func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) error {
+func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 	if s.deep >= maxDeep {
-		return nil
+		return
 	}
 	baseId := len(s.fields)
 	numField := structTyp.NumField()
@@ -214,9 +235,6 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) erro
 
 	for i := 0; i < numField; i++ {
 		f := structTyp.Field(i)
-		if f.PkgPath != "" {
-			// TODO: skip exported field
-		}
 		elemTyp := f.Type
 		var ptrNum int
 		for elemTyp.Kind() == reflect.Ptr {
@@ -233,13 +251,9 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) erro
 		}
 		s.fields[field.id] = field
 		if elemTyp.Kind() == reflect.Struct {
-			err := s.parseFields(field, elemTyp)
-			if err != nil {
-				return err
-			}
+			s.parseFields(field, elemTyp)
 		}
 	}
-	return nil
 }
 
 func joinFieldName(parentPath, name string) string {

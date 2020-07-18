@@ -15,9 +15,9 @@ goos: darwin
 goarch: amd64
 pkg: github.com/henrylee2cn/gofield
 BenchmarkGofield
-BenchmarkGofield-4   	18618808	        54.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGofield-4   	26278818	        45.6 ns/op	       0 B/op	       0 allocs/op
 BenchmarkReflect
-BenchmarkReflect-4   	 6400113	       174 ns/op	       0 B/op	       0 allocs/op
+BenchmarkReflect-4   	 6808384	       180 ns/op	       0 B/op	       0 allocs/op
 PASS
 ```
 
@@ -47,36 +47,30 @@ type (
 ```go
 func BenchmarkGofield(b *testing.B) {
 	b.ReportAllocs()
-
 	var p P1
-	s, err := gofield.Access(p)
-	assert.EqualError(b, err, "type is not struct pointer")
-
-	s, err = gofield.Access(&p)
-	assert.NoError(b, err)
-
+	s := gofield.Access(&p)
+	ids := s.Filter(func(t *gofield.FieldType) bool {
+		return t.UnderlyingKind() == reflect.Int
+	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		num := s.NumField()
-		for i := 0; i < num; i++ {
-			v := s.FieldValue(i)
-			switch v.Kind() {
-			case reflect.Int:
-				v.SetInt(int64(i))
-			case reflect.Struct:
+		for _, id := range ids {
+			v := s.FieldValue(id)
+			if v.Kind() == reflect.Int {
+				v.SetInt(int64(id + 1))
 			}
 		}
 	}
 	b.StopTimer()
 
 	assert.Equal(b, 9, s.NumField())
-	assert.Equal(b, 0, p.A)
-	assert.Equal(b, 1, p.b)
-	assert.Equal(b, 3, p.C)
-	assert.Equal(b, 4, *p.d)
-	assert.Equal(b, 6, p.E)
-	assert.Equal(b, 7, *p.f)
-	assert.Equal(b, 8, **p.g)
+	assert.Equal(b, 1, p.A)
+	assert.Equal(b, 2, p.b)
+	assert.Equal(b, 4, p.C)
+	assert.Equal(b, 5, *p.d)
+	assert.Equal(b, 7, p.E)
+	assert.Equal(b, 8, *p.f)
+	assert.Equal(b, 9, **p.g)
 }
 ```
 
@@ -84,11 +78,7 @@ func BenchmarkGofield(b *testing.B) {
 ```go
 func BenchmarkReflect(b *testing.B) {
 	b.ReportAllocs()
-
-	var p P1
-	s := reflect.ValueOf(&p)
-
-	var valInt int
+	var valInt = 1
 	var setVal func(v reflect.Value)
 	setVal = func(s reflect.Value) {
 		num := s.NumField()
@@ -119,21 +109,23 @@ func BenchmarkReflect(b *testing.B) {
 			}
 		}
 	}
+	var p P1
+	s := reflect.ValueOf(&p)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		valInt = 0
+		valInt = 1
 		setVal(s.Elem())
 	}
 	b.StopTimer()
 
 	assert.Equal(b, 3, s.Elem().NumField())
-	assert.Equal(b, 0, p.A)
-	assert.Equal(b, 1, p.b)
-	assert.Equal(b, 3, p.C)
-	assert.Equal(b, 4, *p.d)
-	assert.Equal(b, 6, p.E)
-	assert.Equal(b, 7, *p.f)
-	assert.Equal(b, 8, **p.g)
+	assert.Equal(b, 1, p.A)
+	assert.Equal(b, 2, p.b)
+	assert.Equal(b, 4, p.C)
+	assert.Equal(b, 5, *p.d)
+	assert.Equal(b, 7, p.E)
+	assert.Equal(b, 8, *p.f)
+	assert.Equal(b, 9, **p.g)
 }
 ```
