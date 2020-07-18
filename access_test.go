@@ -39,9 +39,7 @@ func BenchmarkGofield(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, id := range ids {
 			v := s.FieldValue(id)
-			if v.Kind() == reflect.Int {
-				v.SetInt(int64(id + 1))
-			}
+			v.SetInt(int64(id + 1))
 		}
 	}
 	b.StopTimer()
