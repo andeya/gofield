@@ -18,7 +18,7 @@ type (
 	}
 	P2 struct {
 		C int
-		d int
+		d *int
 		*P3
 	}
 	P3 struct {
@@ -29,14 +29,16 @@ type (
 )
 
 func BenchmarkGofield(b *testing.B) {
+	b.ReportAllocs()
+
 	var p P1
 	s, err := gofield.Access(p)
 	assert.EqualError(b, err, "type is not struct pointer")
 
 	s, err = gofield.Access(&p)
 	assert.NoError(b, err)
+
 	b.ResetTimer()
-	assert.Equal(b, 9, s.NumField())
 	for i := 0; i < b.N; i++ {
 		num := s.NumField()
 		for i := 0; i < num; i++ {
@@ -49,21 +51,23 @@ func BenchmarkGofield(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+
+	assert.Equal(b, 9, s.NumField())
 	assert.Equal(b, 0, p.A)
 	assert.Equal(b, 1, p.b)
 	assert.Equal(b, 3, p.C)
-	assert.Equal(b, 4, p.d)
+	assert.Equal(b, 4, *p.d)
 	assert.Equal(b, 6, p.E)
 	assert.Equal(b, 7, *p.f)
 	assert.Equal(b, 8, **p.g)
 }
 
 func BenchmarkReflect(b *testing.B) {
+	b.ReportAllocs()
+
 	var p P1
 	s := reflect.ValueOf(&p)
-	b.ResetTimer()
-	s = s.Elem()
-	assert.Equal(b, 3, s.NumField())
+
 	var valInt int
 	var setVal func(v reflect.Value)
 	setVal = func(s reflect.Value) {
@@ -95,15 +99,19 @@ func BenchmarkReflect(b *testing.B) {
 			}
 		}
 	}
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		valInt = 0
-		setVal(s)
+		setVal(s.Elem())
 	}
 	b.StopTimer()
+
+	assert.Equal(b, 3, s.Elem().NumField())
 	assert.Equal(b, 0, p.A)
 	assert.Equal(b, 1, p.b)
 	assert.Equal(b, 3, p.C)
-	assert.Equal(b, 4, p.d)
+	assert.Equal(b, 4, *p.d)
 	assert.Equal(b, 6, p.E)
 	assert.Equal(b, 7, *p.f)
 	assert.Equal(b, 8, **p.g)
