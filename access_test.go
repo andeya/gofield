@@ -72,8 +72,8 @@ func BenchmarkReflect(b *testing.B) {
 			f := s.Field(i)
 			for f.Kind() == reflect.Ptr {
 				if f.IsNil() {
-					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).Elem().
-						Set(reflect.New(f.Type().Elem()))
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
+						Elem().Set(reflect.New(f.Type().Elem()))
 				}
 				f = f.Elem()
 				if f.Kind() == reflect.Ptr && f.IsNil() {
@@ -85,8 +85,8 @@ func BenchmarkReflect(b *testing.B) {
 				if f.CanSet() {
 					f.SetInt(int64(valInt))
 				} else {
-					p := (*int)(unsafe.Pointer(f.UnsafeAddr()))
-					*p = valInt
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
+						Elem().SetInt(int64(valInt))
 				}
 				valInt++
 			case reflect.Struct:

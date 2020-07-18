@@ -2,9 +2,12 @@
 
 High-performance struct field accessor based on unsafe pointers.
 
-## Compare
+- `gofield` is **simple** to use and has **three times** the performance of `reflect`
+- The more complex the struct, the more obvious the advantage of `gofield`
+- Support to operate of non-exported fields
+- Use unsafe and pre-analysis of types to improve performance
 
-**`gofield` is simple to use and has twice the performance of `reflect`**
+## Compare
 
 - benchmark result
 ```sh
@@ -12,9 +15,9 @@ goos: darwin
 goarch: amd64
 pkg: github.com/henrylee2cn/gofield
 BenchmarkGofield
-BenchmarkGofield-4   	23960054	        49.1 ns/op
+BenchmarkGofield-4   	23937832	        48.3 ns/op
 BenchmarkReflect
-BenchmarkReflect-4   	12137930	       101 ns/op
+BenchmarkReflect-4   	 7347177	       158 ns/op
 PASS
 ```
 
@@ -67,8 +70,8 @@ func BenchmarkReflect(b *testing.B) {
 			f := s.Field(i)
 			for f.Kind() == reflect.Ptr {
 				if f.IsNil() {
-					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).Elem().
-						Set(reflect.New(f.Type().Elem()))
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
+						Elem().Set(reflect.New(f.Type().Elem()))
 				}
 				f = f.Elem()
 				if f.Kind() == reflect.Ptr && f.IsNil() {
@@ -80,8 +83,8 @@ func BenchmarkReflect(b *testing.B) {
 				if f.CanSet() {
 					f.SetInt(int64(valInt))
 				} else {
-					p := (*int)(unsafe.Pointer(f.UnsafeAddr()))
-					*p = valInt
+					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
+						Elem().SetInt(int64(valInt))
 				}
 				valInt++
 			case reflect.Struct:
