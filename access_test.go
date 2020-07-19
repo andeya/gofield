@@ -35,6 +35,7 @@ func TestGofield(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := s.Filter(func(f *gofield.FieldType) bool {
+		t.Logf("fid=%d, fullpath=%s", f.ID(), f.FullPath())
 		return f.Tag.Get("fe") == "target"
 	})
 	for _, id := range ids {
