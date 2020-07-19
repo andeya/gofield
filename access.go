@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/henrylee2cn/ameda"
+	"github.com/henrylee2cn/structtag"
 )
 
 type (
@@ -225,6 +226,12 @@ func (f *FieldType) Kind() reflect.Kind {
 //go:nosplit
 func (f *FieldType) UnderlyingKind() reflect.Kind {
 	return f.elemTyp.Kind()
+}
+
+// NewTags create a tags object.
+//go:nosplit
+func (f *FieldType) NewTags() (*structtag.Tags, error) {
+	return structtag.Parse(string(f.StructField.Tag))
 }
 
 const maxDeep = 16
