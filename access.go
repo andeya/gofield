@@ -29,9 +29,10 @@ type (
 		id       int
 		fullPath string
 		reflect.StructField
-		ptrNum  int
-		elemTyp reflect.Type
-		parent  *FieldType
+		ptrNum    int
+		elemTyp   reflect.Type
+		parent    *FieldType
+		cacheable bool
 	}
 	StructTypeStore struct {
 		dict map[int32]*StructType // key is runtime type ID
@@ -40,7 +41,8 @@ type (
 )
 
 var (
-	store = newStructTypeStore()
+	cacheAnyFields = true
+	store          = newStructTypeStore()
 )
 
 func newStructTypeStore() *StructTypeStore {
@@ -123,7 +125,7 @@ func (s *Struct) FieldType(id int) *FieldType {
 	return s.typ.fields[id]
 }
 
-func (s *Struct) Filter(fn func(t *FieldType) bool) []int {
+func (s *Struct) Filter(fn func(*FieldType) bool) []int {
 	list := make([]int, 0, s.NumField())
 	for id, field := range s.typ.fields {
 		if fn(field) {
@@ -134,49 +136,42 @@ func (s *Struct) Filter(fn func(t *FieldType) bool) []int {
 }
 
 func (s *Struct) FieldValue(id int) reflect.Value {
-	v := s.getOrInit(id)
-	if v == nil {
+	if !s.checkID(id) {
 		return zero
 	}
-	return v.elemVal
+	v := s.fieldValues[id]
+	if v != nil {
+		return v.elemVal
+	}
+	return s.typ.fields[id].init(s).elemVal
 }
 
 func (s *Struct) checkID(id int) bool {
 	return id >= 0 && id < len(s.fieldValues)
 }
 
-func (s *Struct) getOrInit(id int) *Value {
-	if !s.checkID(id) {
-		return nil
-	}
-	v := s.fieldValues[id]
-	if v != nil {
-		return v
-	}
-	s.typ.fields[id].init(s)
-	return s.fieldValues[id]
-}
-
-func (f *FieldType) init(s *Struct) uintptr {
+func (f *FieldType) init(s *Struct) *Value {
 	if f.parent == nil {
-		return s.value.elemPtr // the original caller ensures that it has been initialized
+		return s.value // the original caller ensures that it has been initialized
 	}
 	v := s.fieldValues[f.id]
 	if v != nil {
-		return v.elemPtr
+		return v
 	}
-	pptr := f.parent.init(s)
-	ptr := pptr + f.Offset
+	pVal := f.parent.init(s)
+	ptr := pVal.elemPtr + f.Offset
 	valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(ptr))
 	if f.ptrNum > 0 {
 		valPtr = derefPtrAndInit(valPtr, f.ptrNum)
 	}
-	elemPtr := valPtr.Pointer()
-	s.fieldValues[f.id] = &Value{
+	val := &Value{
 		elemVal: valPtr.Elem(),
-		elemPtr: elemPtr,
+		elemPtr: valPtr.Pointer(),
 	}
-	return elemPtr
+	if f.cacheable {
+		s.fieldValues[f.id] = val
+	}
+	return val
 }
 
 func derefPtrAndInit(v reflect.Value, numPtr int) reflect.Value {
@@ -241,6 +236,7 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			elemTyp = elemTyp.Elem()
 			ptrNum++
 		}
+		isStruct := elemTyp.Kind() == reflect.Struct
 		field := &FieldType{
 			id:          baseId + i, // 0, 1, 2, ...
 			fullPath:    joinFieldName(parent.fullPath, f.Name),
@@ -248,9 +244,10 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			parent:      parent,
+			cacheable:   cacheAnyFields || isStruct,
 		}
 		s.fields[field.id] = field
-		if elemTyp.Kind() == reflect.Struct {
+		if isStruct {
 			s.parseFields(field, elemTyp)
 		}
 	}
