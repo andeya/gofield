@@ -263,18 +263,17 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			elemTyp = elemTyp.Elem()
 			ptrNum++
 		}
-		tags, _ := structtag.Parse(string(f.Tag))
-		if tags == nil {
-			tags = new(structtag.Tags)
-		}
 		field := &FieldType{
 			id:          baseId + i, // 0, 1, 2, ...
 			fullPath:    joinFieldName(parent.fullPath, f.Name),
 			StructField: f,
-			Subtags:     *tags,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			parent:      parent,
+		}
+		tags, _ := structtag.Parse(string(f.Tag))
+		if tags != nil {
+			field.Subtags = *tags
 		}
 		s.fields[field.id] = field
 		if elemTyp.Kind() == reflect.Struct {
