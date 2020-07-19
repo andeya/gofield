@@ -31,6 +31,7 @@ type (
 		id       int
 		fullPath string
 		reflect.StructField
+		SubTags structtag.Tags
 		ptrNum  int
 		elemTyp reflect.Type
 		parent  *FieldType
@@ -228,12 +229,6 @@ func (f *FieldType) UnderlyingKind() reflect.Kind {
 	return f.elemTyp.Kind()
 }
 
-// NewTags create a tags object.
-//go:nosplit
-func (f *FieldType) NewTags() (*structtag.Tags, error) {
-	return structtag.Parse(string(f.StructField.Tag))
-}
-
 const maxDeep = 16
 
 //go:nosplit
@@ -268,10 +263,15 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			elemTyp = elemTyp.Elem()
 			ptrNum++
 		}
+		tags, _ := structtag.Parse(string(f.Tag))
+		if tags == nil {
+			tags = new(structtag.Tags)
+		}
 		field := &FieldType{
 			id:          baseId + i, // 0, 1, 2, ...
 			fullPath:    joinFieldName(parent.fullPath, f.Name),
 			StructField: f,
+			SubTags:     *tags,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			parent:      parent,
