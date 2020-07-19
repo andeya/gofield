@@ -48,12 +48,14 @@ var (
 // TODO: remove
 const cacheAnyFields = true
 
+//go:nosplit
 func newStructTypeStore() *StructTypeStore {
 	return &StructTypeStore{
 		dict: make(map[int32]*StructType, 128),
 	}
 }
 
+//go:nosplit
 func (s *StructTypeStore) load(tid int32) (*StructType, bool) {
 	s.RLock()
 	sTyp, ok := s.dict[tid]
@@ -61,12 +63,14 @@ func (s *StructTypeStore) load(tid int32) (*StructType, bool) {
 	return sTyp, ok
 }
 
+//go:nosplit
 func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Lock()
 	s.dict[sTyp.tid] = sTyp
 	s.Unlock()
 }
 
+//go:nosplit
 func Prepare(structPtr interface{}) error {
 	var val ameda.Value
 	switch j := structPtr.(type) {
@@ -88,6 +92,7 @@ func Prepare(structPtr interface{}) error {
 	return nil
 }
 
+//go:nosplit
 func Access(structPtr interface{}) *Struct {
 	var val ameda.Value
 	switch j := structPtr.(type) {
@@ -105,6 +110,7 @@ func Access(structPtr interface{}) *Struct {
 	return newStruct(sTyp, val.Pointer())
 }
 
+//go:nosplit
 func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	return &Struct{
 		typ: typ,
@@ -117,10 +123,12 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 
 var zero reflect.Value
 
+//go:nosplit
 func (s *Struct) NumField() int {
 	return len(s.typ.fields)
 }
 
+//go:nosplit
 func (s *Struct) FieldType(id int) *FieldType {
 	if !s.checkID(id) {
 		return nil
@@ -128,6 +136,7 @@ func (s *Struct) FieldType(id int) *FieldType {
 	return s.typ.fields[id]
 }
 
+//go:nosplit
 func (s *Struct) Filter(fn func(*FieldType) bool) []int {
 	list := make([]int, 0, s.NumField())
 	for id, field := range s.typ.fields {
@@ -138,6 +147,7 @@ func (s *Struct) Filter(fn func(*FieldType) bool) []int {
 	return list
 }
 
+//go:nosplit
 func (s *Struct) FieldValue(id int) reflect.Value {
 	if !s.checkID(id) {
 		return zero
@@ -149,6 +159,7 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 	return s.typ.fields[id].init(s).elemVal
 }
 
+//go:nosplit
 func (s *Struct) checkID(id int) bool {
 	return id >= 0 && id < len(s.fieldValues)
 }
@@ -177,6 +188,7 @@ func (f *FieldType) init(s *Struct) Value {
 	return v
 }
 
+//go:nosplit
 func derefPtrAndInit(v reflect.Value, numPtr int) reflect.Value {
 	for ; numPtr > 0; numPtr-- {
 		if v.IsNil() {
@@ -190,24 +202,29 @@ func derefPtrAndInit(v reflect.Value, numPtr int) reflect.Value {
 	return v
 }
 
+//go:nosplit
 func (f *FieldType) ID() int {
 	return f.id
 }
 
+//go:nosplit
 func (f *FieldType) FullPath() string {
 	return f.fullPath
 }
 
+//go:nosplit
 func (f *FieldType) Kind() reflect.Kind {
 	return f.StructField.Type.Kind()
 }
 
+//go:nosplit
 func (f *FieldType) UnderlyingKind() reflect.Kind {
 	return f.elemTyp.Kind()
 }
 
 const maxDeep = 16
 
+//go:nosplit
 func newStructType(structPtr interface{}) *StructType {
 	v, ok := structPtr.(reflect.Value)
 	if !ok {
@@ -256,6 +273,7 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 	}
 }
 
+//go:nosplit
 func joinFieldName(parentPath, name string) string {
 	if parentPath == "" {
 		return name
