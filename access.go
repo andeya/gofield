@@ -12,8 +12,8 @@ import (
 type (
 	Struct struct {
 		typ         *StructType
-		value       *Value
-		fieldValues []*Value // idx is int
+		value       Value
+		fieldValues []Value // idx is int
 	}
 	Value struct {
 		elemVal reflect.Value
@@ -41,9 +41,12 @@ type (
 )
 
 var (
-	cacheAnyFields = true
-	store          = newStructTypeStore()
+	store = newStructTypeStore()
 )
+
+// after testing, it is high performance when it is true
+// TODO: remove
+const cacheAnyFields = true
 
 func newStructTypeStore() *StructTypeStore {
 	return &StructTypeStore{
@@ -105,10 +108,10 @@ func Access(structPtr interface{}) *Struct {
 func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	return &Struct{
 		typ: typ,
-		value: &Value{
+		value: Value{
 			elemPtr: elemPtr,
 		},
-		fieldValues: make([]*Value, len(typ.fields)),
+		fieldValues: make([]Value, len(typ.fields)),
 	}
 }
 
@@ -140,7 +143,7 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 		return zero
 	}
 	v := s.fieldValues[id]
-	if v != nil {
+	if v.elemPtr > 0 {
 		return v.elemVal
 	}
 	return s.typ.fields[id].init(s).elemVal
@@ -150,12 +153,12 @@ func (s *Struct) checkID(id int) bool {
 	return id >= 0 && id < len(s.fieldValues)
 }
 
-func (f *FieldType) init(s *Struct) *Value {
+func (f *FieldType) init(s *Struct) Value {
 	if f.parent == nil {
 		return s.value // the original caller ensures that it has been initialized
 	}
 	v := s.fieldValues[f.id]
-	if v != nil {
+	if v.elemPtr > 0 {
 		return v
 	}
 	pVal := f.parent.init(s)
@@ -164,14 +167,14 @@ func (f *FieldType) init(s *Struct) *Value {
 	if f.ptrNum > 0 {
 		valPtr = derefPtrAndInit(valPtr, f.ptrNum)
 	}
-	val := &Value{
+	v = Value{
 		elemVal: valPtr.Elem(),
 		elemPtr: valPtr.Pointer(),
 	}
 	if f.cacheable {
-		s.fieldValues[f.id] = val
+		s.fieldValues[f.id] = v
 	}
-	return val
+	return v
 }
 
 func derefPtrAndInit(v reflect.Value, numPtr int) reflect.Value {
