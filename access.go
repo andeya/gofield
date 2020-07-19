@@ -29,10 +29,9 @@ type (
 		id       int
 		fullPath string
 		reflect.StructField
-		ptrNum    int
-		elemTyp   reflect.Type
-		parent    *FieldType
-		cacheable bool
+		ptrNum  int
+		elemTyp reflect.Type
+		parent  *FieldType
 	}
 	StructTypeStore struct {
 		dict map[int32]*StructType // key is runtime type ID
@@ -43,10 +42,6 @@ type (
 var (
 	store = newStructTypeStore()
 )
-
-// after testing, it is high performance when it is true
-// TODO: remove
-const cacheAnyFields = true
 
 //go:nosplit
 func newStructTypeStore() *StructTypeStore {
@@ -182,9 +177,7 @@ func (f *FieldType) init(s *Struct) Value {
 		elemVal: valPtr.Elem(),
 		elemPtr: valPtr.Pointer(),
 	}
-	if f.cacheable {
-		s.fieldValues[f.id] = v
-	}
+	s.fieldValues[f.id] = v
 	return v
 }
 
@@ -256,7 +249,6 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			elemTyp = elemTyp.Elem()
 			ptrNum++
 		}
-		isStruct := elemTyp.Kind() == reflect.Struct
 		field := &FieldType{
 			id:          baseId + i, // 0, 1, 2, ...
 			fullPath:    joinFieldName(parent.fullPath, f.Name),
@@ -264,10 +256,9 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			parent:      parent,
-			cacheable:   cacheAnyFields || isStruct,
 		}
 		s.fields[field.id] = field
-		if isStruct {
+		if elemTyp.Kind() == reflect.Struct {
 			s.parseFields(field, elemTyp)
 		}
 	}
