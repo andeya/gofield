@@ -31,7 +31,7 @@ type (
 		id       int
 		fullPath string
 		reflect.StructField
-		SubTags structtag.Tags
+		Subtags structtag.Tags
 		ptrNum  int
 		elemTyp reflect.Type
 		parent  *FieldType
@@ -271,7 +271,7 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			id:          baseId + i, // 0, 1, 2, ...
 			fullPath:    joinFieldName(parent.fullPath, f.Name),
 			StructField: f,
-			SubTags:     *tags,
+			Subtags:     *tags,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			parent:      parent,
