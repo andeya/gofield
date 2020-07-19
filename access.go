@@ -10,21 +10,22 @@ import (
 )
 
 type (
+	// Struct struct accessor
 	Struct struct {
 		typ         *StructType
 		value       Value
 		fieldValues []Value // idx is int
 	}
-	Value struct {
-		elemVal reflect.Value
-		elemPtr uintptr
-	}
+	// StructType struct type info
 	StructType struct {
 		tid      int32
 		elemType reflect.Type
 		fields   []*FieldType
 		deep     int
 	}
+	// FieldID id assigned to each field in sequence
+	FieldID = int
+	// FieldType field type info
 	FieldType struct {
 		id       int
 		fullPath string
@@ -33,6 +34,12 @@ type (
 		elemTyp reflect.Type
 		parent  *FieldType
 	}
+	// Value field value
+	Value struct {
+		elemVal reflect.Value
+		elemPtr uintptr
+	}
+	// StructTypeStore struct type info global cache
 	StructTypeStore struct {
 		dict map[int32]*StructType // key is runtime type ID
 		sync.RWMutex
@@ -40,15 +47,10 @@ type (
 )
 
 var (
-	store = newStructTypeStore()
-)
-
-//go:nosplit
-func newStructTypeStore() *StructTypeStore {
-	return &StructTypeStore{
+	store = &StructTypeStore{
 		dict: make(map[int32]*StructType, 128),
 	}
-}
+)
 
 //go:nosplit
 func (s *StructTypeStore) load(tid int32) (*StructType, bool) {
@@ -65,6 +67,7 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Unlock()
 }
 
+// Prepare pre-analyze the struct type info and cache the results.
 //go:nosplit
 func Prepare(structPtr interface{}) error {
 	var val ameda.Value
@@ -87,6 +90,7 @@ func Prepare(structPtr interface{}) error {
 	return nil
 }
 
+// Access analyze the struct type info and create struct accessor.
 //go:nosplit
 func Access(structPtr interface{}) *Struct {
 	var val ameda.Value
@@ -118,11 +122,13 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 
 var zero reflect.Value
 
+// NumField get the number of fields.
 //go:nosplit
 func (s *Struct) NumField() int {
 	return len(s.typ.fields)
 }
 
+// FieldType get the field type info corresponding to the id.
 //go:nosplit
 func (s *Struct) FieldType(id int) *FieldType {
 	if !s.checkID(id) {
@@ -131,17 +137,7 @@ func (s *Struct) FieldType(id int) *FieldType {
 	return s.typ.fields[id]
 }
 
-//go:nosplit
-func (s *Struct) Filter(fn func(*FieldType) bool) []int {
-	list := make([]int, 0, s.NumField())
-	for id, field := range s.typ.fields {
-		if fn(field) {
-			list = append(list, id)
-		}
-	}
-	return list
-}
-
+// FieldValue get the field value corresponding to the id.
 //go:nosplit
 func (s *Struct) FieldValue(id int) reflect.Value {
 	if !s.checkID(id) {
@@ -152,6 +148,18 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 		return v.elemVal
 	}
 	return s.typ.fields[id].init(s).elemVal
+}
+
+// Filter filter all fields and return a list of their ids.
+//go:nosplit
+func (s *Struct) Filter(fn func(*FieldType) bool) []int {
+	list := make([]int, 0, s.NumField())
+	for id, field := range s.typ.fields {
+		if fn(field) {
+			list = append(list, id)
+		}
+	}
+	return list
 }
 
 //go:nosplit
@@ -195,21 +203,25 @@ func derefPtrAndInit(v reflect.Value, numPtr int) reflect.Value {
 	return v
 }
 
+// ID get the field id.
 //go:nosplit
 func (f *FieldType) ID() int {
 	return f.id
 }
 
+// FullPath get the field full path.
 //go:nosplit
 func (f *FieldType) FullPath() string {
 	return f.fullPath
 }
 
+// Kind get the field kind.
 //go:nosplit
 func (f *FieldType) Kind() reflect.Kind {
 	return f.StructField.Type.Kind()
 }
 
+// UnderlyingKind get the underlying kind of the field
 //go:nosplit
 func (f *FieldType) UnderlyingKind() reflect.Kind {
 	return f.elemTyp.Kind()
