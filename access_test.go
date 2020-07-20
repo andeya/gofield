@@ -315,8 +315,7 @@ func BenchmarkTag_Group1(b *testing.B) {
 	b.ReportAllocs()
 
 	maker := func(ft *gofield.FieldType) (string, bool) {
-		tag, ok := ft.Tag.Lookup("mapper")
-		return tag, ok
+		return ft.Tag.Lookup("mapper")
 	}
 	accessor := gofield.New(gofield.WithGroupBy(maker))
 
