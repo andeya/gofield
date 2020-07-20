@@ -135,19 +135,12 @@ func BenchmarkReflect(b *testing.B) {
 ```go
 func TestMapper1(t *testing.T) {
 	maker := func(ft *gofield.FieldType) (string, bool) {
-		tag, err := ft.Subtags.Get("mapper")
-		if err != nil {
-			return "", false
-		}
-		return tag.Name, true
+		tag, ok := ft.Tag.Lookup("mapper")
+		return tag, ok
 	}
 	mapper := gofield.NewMapper(maker)
 
-	type P struct {
-		Apple  string `mapper:"a"`
-		banana int    `mapper:"b"`
-	}
-	var p P
+	var p M
 	p.Apple = "red"
 	p.banana = 7
 	m := mapper.MustMake(&p)
