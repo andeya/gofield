@@ -323,7 +323,7 @@ func newStructType(tid int32, structPtr interface{}) *StructType {
 	sTyp := &StructType{
 		tid:      tid,
 		elemType: structTyp,
-		fields:   make([]*FieldType, 0, 8),
+		fields:   make([]*FieldType, 0, 16),
 	}
 	sTyp.parseFields(&FieldType{}, structTyp)
 	return sTyp
