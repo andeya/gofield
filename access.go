@@ -48,6 +48,8 @@ type (
 	}
 )
 
+const maxFieldDeep = 16
+
 var (
 	store = &StructTypeStore{
 		dict: make(map[int32]*StructType, 1024),
@@ -70,6 +72,31 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Unlock()
 }
 
+// Analyze analyze the struct and return its type info.
+//go:nosplit
+func Analyze(structPtr interface{}) (*StructType, error) {
+	var val ameda.Value
+	switch j := structPtr.(type) {
+	case reflect.Value:
+		val = ameda.ValueFrom2(&j)
+	default:
+		val = ameda.ValueOf(structPtr)
+	}
+	tid := val.RuntimeTypeID()
+	sTyp, ok := store.load(tid)
+	if !ok {
+		for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+			val = val.Elem()
+		}
+		if val.Kind() != reflect.Struct {
+			return nil, errors.New("type is not struct pointer")
+		}
+		sTyp = newStructType(tid, structPtr)
+		store.store(sTyp)
+	}
+	return sTyp, nil
+}
+
 // AccessWithErr analyze the struct type info and create struct accessor.
 //go:nosplit
 func AccessWithErr(structPtr interface{}) (*Struct, error) {
@@ -86,7 +113,7 @@ func AccessWithErr(structPtr interface{}) (*Struct, error) {
 	tid := val.RuntimeTypeID()
 	sTyp, ok := store.load(tid)
 	if !ok {
-		sTyp = newStructType(structPtr)
+		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
 	return newStruct(sTyp, val.Pointer()), nil
@@ -107,10 +134,46 @@ func Access(structPtr interface{}) *Struct {
 	tid := val.RuntimeTypeID()
 	sTyp, ok := store.load(tid)
 	if !ok {
-		sTyp = newStructType(structPtr)
+		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
 	return newStruct(sTyp, val.Pointer())
+}
+
+// AccessWithErr create a new struct accessor.
+//go:nosplit
+func (s *StructType) AccessWithErr(structPtr interface{}) (*Struct, error) {
+	var val ameda.Value
+	switch j := structPtr.(type) {
+	case reflect.Value:
+		val = ameda.ValueFrom2(&j)
+	default:
+		val = ameda.ValueOf(structPtr)
+	}
+	tid := val.RuntimeTypeID()
+	if s.tid != tid {
+		return nil, errors.New("type mismatch")
+	}
+	return newStruct(s, val.Pointer()), nil
+}
+
+// Access create a new struct accessor.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
+//go:nosplit
+func (s *StructType) Access(structPtr interface{}) *Struct {
+	var val ameda.Value
+	switch j := structPtr.(type) {
+	case reflect.Value:
+		val = ameda.ValueFrom2(&j)
+	default:
+		val = ameda.ValueOf(structPtr)
+	}
+	tid := val.RuntimeTypeID()
+	if s.tid != tid {
+		panic("type mismatch")
+	}
+	return newStruct(s, val.Pointer())
 }
 
 //go:nosplit
@@ -249,17 +312,16 @@ func (f *FieldType) UnderlyingKind() reflect.Kind {
 	return f.elemTyp.Kind()
 }
 
-const maxDeep = 16
-
 //go:nosplit
-func newStructType(structPtr interface{}) *StructType {
+func newStructType(tid int32, structPtr interface{}) *StructType {
 	v, ok := structPtr.(reflect.Value)
 	if !ok {
 		v = reflect.ValueOf(structPtr)
 	}
-	structTyp := v.Elem().Type()
+	v = ameda.DereferencePtrValue(v)
+	structTyp := v.Type()
 	sTyp := &StructType{
-		tid:      ameda.ValueFrom(v).RuntimeTypeID(),
+		tid:      tid,
 		elemType: structTyp,
 		fields:   make([]*FieldType, 0, 8),
 	}
@@ -268,7 +330,7 @@ func newStructType(structPtr interface{}) *StructType {
 }
 
 func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
-	if s.deep >= maxDeep {
+	if s.deep >= maxFieldDeep {
 		return
 	}
 	baseId := len(s.fields)
