@@ -157,6 +157,20 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 	return s.typ.fields[id].init(s).elemVal
 }
 
+// Field get the field type and value corresponding to the id.
+//go:nosplit
+func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
+	if !s.checkID(id) {
+		return nil, zero
+	}
+	t := s.typ.fields[id]
+	v := s.fieldValues[id]
+	if v.elemPtr > 0 {
+		return t, v.elemVal
+	}
+	return t, t.init(s).elemVal
+}
+
 // Filter filter all fields and return a list of their ids.
 //go:nosplit
 func (s *Struct) Filter(fn func(*FieldType) bool) []int {
