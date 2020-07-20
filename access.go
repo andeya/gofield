@@ -52,6 +52,7 @@ var (
 	store = &StructTypeStore{
 		dict: make(map[int32]*StructType, 128),
 	}
+	zero reflect.Value
 )
 
 //go:nosplit
@@ -122,7 +123,11 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	}
 }
 
-var zero reflect.Value
+// RuntimeID get the runtime id of struct.
+//go:nosplit
+func (s *Struct) RuntimeID() int32 {
+	return s.typ.tid
+}
 
 // NumField get the number of fields.
 //go:nosplit
