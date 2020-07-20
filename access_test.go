@@ -58,7 +58,7 @@ func TestGofield1(t *testing.T) {
 }
 
 func TestGofield2(t *testing.T) {
-	st, err := gofield.Analyze(P1{})
+	st, err := gofield.Analyze(&P1{})
 	assert.NoError(t, err)
 	ids := st.Filter(func(f *gofield.FieldType) bool {
 		return f.UnderlyingKind() == reflect.Int
@@ -86,6 +86,37 @@ func TestGofield2(t *testing.T) {
 	assert.Equal(t, 8, *p.f)
 	assert.Equal(t, 999, **p.g)
 }
+
+func TestGofield3(t *testing.T) {
+	st, err := gofield.Analyze(reflect.ValueOf(&P1{}))
+	assert.NoError(t, err)
+	ids := st.Filter(func(f *gofield.FieldType) bool {
+		return f.UnderlyingKind() == reflect.Int
+	})
+	ids2 := st.Filter(func(f *gofield.FieldType) bool {
+		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Subtags.String())
+		return f.Tag.Get("fe") == "target"
+	})
+	var p P1
+	s := st.Access(reflect.ValueOf(&p))
+	for _, id := range ids {
+		v := s.FieldValue(id)
+		v.SetInt(int64(id + 1))
+	}
+	for _, id := range ids2 {
+		v := s.FieldValue(id)
+		v.SetInt(999)
+	}
+	assert.Equal(t, 9, s.NumField())
+	assert.Equal(t, 2, p.b)
+	assert.Equal(t, 1, p.A)
+	assert.Equal(t, 4, p.C)
+	assert.Equal(t, 5, *p.d)
+	assert.Equal(t, 7, p.E)
+	assert.Equal(t, 8, *p.f)
+	assert.Equal(t, 999, **p.g)
+}
+
 func BenchmarkGofield1(b *testing.B) {
 	b.ReportAllocs()
 	var p P1

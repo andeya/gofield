@@ -75,22 +75,12 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 // Analyze analyze the struct and return its type info.
 //go:nosplit
 func Analyze(structPtr interface{}) (*StructType, error) {
-	var val ameda.Value
-	switch j := structPtr.(type) {
-	case reflect.Value:
-		val = ameda.ValueFrom2(&j)
-	default:
-		val = ameda.ValueOf(structPtr)
+	tid, _, err := parseStructPtrWithCheck(structPtr)
+	if err != nil {
+		return nil, err
 	}
-	tid := val.RuntimeTypeID()
 	sTyp, ok := store.load(tid)
 	if !ok {
-		for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
-			val = val.Elem()
-		}
-		if val.Kind() != reflect.Struct {
-			return nil, errors.New("type is not struct pointer")
-		}
 		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
@@ -100,23 +90,16 @@ func Analyze(structPtr interface{}) (*StructType, error) {
 // AccessWithErr analyze the struct type info and create struct accessor.
 //go:nosplit
 func AccessWithErr(structPtr interface{}) (*Struct, error) {
-	var val ameda.Value
-	switch j := structPtr.(type) {
-	case reflect.Value:
-		val = ameda.ValueFrom2(&j)
-	default:
-		val = ameda.ValueOf(structPtr)
+	tid, ptr, err := parseStructPtrWithCheck(structPtr)
+	if err != nil {
+		return nil, err
 	}
-	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return nil, errors.New("type is not struct pointer")
-	}
-	tid := val.RuntimeTypeID()
 	sTyp, ok := store.load(tid)
 	if !ok {
 		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
-	return newStruct(sTyp, val.Pointer()), nil
+	return newStruct(sTyp, ptr), nil
 }
 
 // Access analyze the struct type info and create struct accessor.
@@ -124,37 +107,23 @@ func AccessWithErr(structPtr interface{}) (*Struct, error) {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func Access(structPtr interface{}) *Struct {
-	var val ameda.Value
-	switch j := structPtr.(type) {
-	case reflect.Value:
-		val = ameda.ValueFrom2(&j)
-	default:
-		val = ameda.ValueOf(structPtr)
-	}
-	tid := val.RuntimeTypeID()
+	tid, ptr := parseStructPtr(structPtr)
 	sTyp, ok := store.load(tid)
 	if !ok {
 		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
-	return newStruct(sTyp, val.Pointer())
+	return newStruct(sTyp, ptr)
 }
 
 // AccessWithErr create a new struct accessor.
 //go:nosplit
 func (s *StructType) AccessWithErr(structPtr interface{}) (*Struct, error) {
-	var val ameda.Value
-	switch j := structPtr.(type) {
-	case reflect.Value:
-		val = ameda.ValueFrom2(&j)
-	default:
-		val = ameda.ValueOf(structPtr)
-	}
-	tid := val.RuntimeTypeID()
+	tid, ptr := parseStructPtr(structPtr)
 	if s.tid != tid {
 		return nil, errors.New("type mismatch")
 	}
-	return newStruct(s, val.Pointer()), nil
+	return newStruct(s, ptr), nil
 }
 
 // Access create a new struct accessor.
@@ -162,18 +131,11 @@ func (s *StructType) AccessWithErr(structPtr interface{}) (*Struct, error) {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func (s *StructType) Access(structPtr interface{}) *Struct {
-	var val ameda.Value
-	switch j := structPtr.(type) {
-	case reflect.Value:
-		val = ameda.ValueFrom2(&j)
-	default:
-		val = ameda.ValueOf(structPtr)
-	}
-	tid := val.RuntimeTypeID()
+	tid, ptr := parseStructPtr(structPtr)
 	if s.tid != tid {
 		panic("type mismatch")
 	}
-	return newStruct(s, val.Pointer())
+	return newStruct(s, ptr)
 }
 
 //go:nosplit
