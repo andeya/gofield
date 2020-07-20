@@ -135,7 +135,7 @@ func BenchmarkReflect(b *testing.B) {
 goos: darwin
 goarch: amd64
 pkg: github.com/henrylee2cn/gofield
-BenchmarkTag_Group1-4            1310958               884 ns/op             608 B/op          7 allocs/op
+BenchmarkTag_Gofield1-4          1310958               884 ns/op             608 B/op          7 allocs/op
 BenchmarkTag_Reflect1-4           213937              5381 ns/op             856 B/op         53 allocs/op
 PASS
 ```
@@ -158,7 +158,7 @@ type G struct {
 
 - gofield example
 ```go
-func BenchmarkTag_Group1(b *testing.B) {
+func BenchmarkTag_Gofield1(b *testing.B) {
 	b.ReportAllocs()
 
 	maker := func(ft *gofield.FieldType) (string, bool) {

@@ -311,7 +311,7 @@ type G struct {
 	E5     string `mapper:"e"`
 }
 
-func BenchmarkTag_Group1(b *testing.B) {
+func BenchmarkTag_Gofield1(b *testing.B) {
 	b.ReportAllocs()
 
 	maker := func(ft *gofield.FieldType) (string, bool) {
