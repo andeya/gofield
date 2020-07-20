@@ -7,10 +7,15 @@ import (
 	"unsafe"
 
 	"github.com/henrylee2cn/ameda"
-	"github.com/henrylee2cn/structtag"
 )
 
 type (
+	// Accessor struct accessor factory
+	Accessor struct {
+		dict map[int32]*StructType // key is runtime type ID
+		sync.RWMutex
+		groupFunc FieldGroupFunc
+	}
 	// Struct struct accessor
 	Struct struct {
 		*StructType
@@ -19,10 +24,11 @@ type (
 	}
 	// StructType struct type info
 	StructType struct {
-		tid      int32
-		elemType reflect.Type
-		fields   []*FieldType
-		deep     int
+		tid        int32
+		elemType   reflect.Type
+		fields     []*FieldType
+		fieldGroup map[string][]*FieldType
+		deep       int
 	}
 	// FieldID id assigned to each field in sequence
 	FieldID = int
@@ -31,7 +37,6 @@ type (
 		id       int
 		fullPath string
 		reflect.StructField
-		Subtags structtag.Tags
 		ptrNum  int
 		elemTyp reflect.Type
 		parent  *FieldType
@@ -41,26 +46,41 @@ type (
 		elemVal reflect.Value
 		elemPtr uintptr
 	}
-	// StructTypeStore struct type info global cache
-	StructTypeStore struct {
-		dict map[int32]*StructType // key is runtime type ID
-		sync.RWMutex
-	}
+	// FieldGroupFunc create the group of the field type
+	FieldGroupFunc func(*FieldType) (string, bool)
+	// Option accessor option
+	Option func(*Accessor)
 )
 
 const maxFieldDeep = 16
 
 var (
-	store = &StructTypeStore{
-		dict: make(map[int32]*StructType, 1024),
-	}
+	defaultGofield  = New()
 	zero            = reflect.Value{}
 	errTypeMismatch = errors.New("type mismatch")
 	errIllegalType  = errors.New("type is not struct pointer")
 )
 
+// WithGroupBy set FieldGroupFunc to *Accessor.
+func WithGroupBy(fn FieldGroupFunc) Option {
+	return func(g *Accessor) {
+		g.groupFunc = fn
+	}
+}
+
+// New create a new struct accessor factory.
+func New(opt ...Option) *Accessor {
+	g := &Accessor{
+		dict: make(map[int32]*StructType, 1024),
+	}
+	for _, fn := range opt {
+		fn(g)
+	}
+	return g
+}
+
 //go:nosplit
-func (s *StructTypeStore) load(tid int32) (*StructType, bool) {
+func (s *Accessor) load(tid int32) (*StructType, bool) {
 	s.RLock()
 	sTyp, ok := s.dict[tid]
 	s.RUnlock()
@@ -68,7 +88,7 @@ func (s *StructTypeStore) load(tid int32) (*StructType, bool) {
 }
 
 //go:nosplit
-func (s *StructTypeStore) store(sTyp *StructType) {
+func (s *Accessor) store(sTyp *StructType) {
 	s.Lock()
 	s.dict[sTyp.tid] = sTyp
 	s.Unlock()
@@ -79,7 +99,15 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func MustAnalyze(structPtr interface{}) *StructType {
-	s, err := Analyze(structPtr)
+	return defaultGofield.MustAnalyze(structPtr)
+}
+
+// MustAnalyze analyze the struct and return its type info.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
+//go:nosplit
+func (g *Accessor) MustAnalyze(structPtr interface{}) *StructType {
+	s, err := g.Analyze(structPtr)
 	if err != nil {
 		panic(err)
 	}
@@ -89,19 +117,25 @@ func MustAnalyze(structPtr interface{}) *StructType {
 // Analyze analyze the struct and return its type info.
 //go:nosplit
 func Analyze(structPtr interface{}) (*StructType, error) {
+	return defaultGofield.Analyze(structPtr)
+}
+
+// Analyze analyze the struct and return its type info.
+//go:nosplit
+func (g *Accessor) Analyze(structPtr interface{}) (*StructType, error) {
 	tid, _, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
-	return analyze(tid, structPtr), nil
+	return g.analyze(tid, structPtr), nil
 }
 
 //go:nosplit
-func analyze(tid int32, structPtr interface{}) *StructType {
-	sTyp, ok := store.load(tid)
+func (g *Accessor) analyze(tid int32, structPtr interface{}) *StructType {
+	sTyp, ok := g.load(tid)
 	if !ok {
-		sTyp = newStructType(tid, structPtr)
-		store.store(sTyp)
+		sTyp = g.newStructType(tid, structPtr)
+		g.store(sTyp)
 	}
 	return sTyp
 }
@@ -111,11 +145,19 @@ func analyze(tid int32, structPtr interface{}) *StructType {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func MustAccess(structPtr interface{}) *Struct {
+	return defaultGofield.MustAccess(structPtr)
+}
+
+// MustAccess analyze the struct type info and create struct accessor.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
+//go:nosplit
+func (g *Accessor) MustAccess(structPtr interface{}) *Struct {
 	tid, ptr := parseStructInfo(structPtr)
-	sTyp, ok := store.load(tid)
+	sTyp, ok := g.load(tid)
 	if !ok {
-		sTyp = newStructType(tid, structPtr)
-		store.store(sTyp)
+		sTyp = g.newStructType(tid, structPtr)
+		g.store(sTyp)
 	}
 	return newStruct(sTyp, ptr)
 }
@@ -123,14 +165,20 @@ func MustAccess(structPtr interface{}) *Struct {
 // Access analyze the struct type info and create struct accessor.
 //go:nosplit
 func Access(structPtr interface{}) (*Struct, error) {
+	return defaultGofield.Access(structPtr)
+}
+
+// Access analyze the struct type info and create struct accessor.
+//go:nosplit
+func (g *Accessor) Access(structPtr interface{}) (*Struct, error) {
 	tid, ptr, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
-	sTyp, ok := store.load(tid)
+	sTyp, ok := g.load(tid)
 	if !ok {
-		sTyp = newStructType(tid, structPtr)
-		store.store(sTyp)
+		sTyp = g.newStructType(tid, structPtr)
+		g.store(sTyp)
 	}
 	return newStruct(sTyp, ptr), nil
 }
@@ -155,6 +203,29 @@ func (s *StructType) Access(structPtr interface{}) (*Struct, error) {
 		return nil, errTypeMismatch
 	}
 	return newStruct(s, ptr), nil
+}
+
+// GroupValues return the field values by group.
+//go:nosplit
+func (s *Struct) GroupValues(group string) []reflect.Value {
+	a := s.StructType.GroupTypes(group)
+	r := make([]reflect.Value, len(a))
+	for i, ft := range a {
+		v := s.fieldValues[ft.id]
+		if v.elemPtr > 0 {
+			r[i] = v.elemVal
+		} else {
+			r[i] = ft.init(s).elemVal
+		}
+	}
+	return r
+}
+
+// GroupTypes return the field types by group.
+//go:nosplit
+func (s *StructType) GroupTypes(group string) []*FieldType {
+	a := s.fieldGroup[group]
+	return a
 }
 
 //go:nosplit
@@ -294,7 +365,7 @@ func (f *FieldType) UnderlyingKind() reflect.Kind {
 }
 
 //go:nosplit
-func newStructType(tid int32, structPtr interface{}) *StructType {
+func (g *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 	v, ok := structPtr.(reflect.Value)
 	if !ok {
 		v = reflect.ValueOf(structPtr)
@@ -307,6 +378,9 @@ func newStructType(tid int32, structPtr interface{}) *StructType {
 		fields:   make([]*FieldType, 0, 16),
 	}
 	sTyp.parseFields(&FieldType{}, structTyp)
+	if g.groupFunc != nil {
+		sTyp.groupBy(g.groupFunc)
+	}
 	return sTyp
 }
 
@@ -334,13 +408,21 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			elemTyp:     elemTyp,
 			parent:      parent,
 		}
-		tags, _ := structtag.Parse(string(f.Tag))
-		if tags != nil {
-			field.Subtags = *tags
-		}
 		s.fields[field.id] = field
 		if elemTyp.Kind() == reflect.Struct {
 			s.parseFields(field, elemTyp)
+		}
+	}
+}
+
+//go:nosplit
+func (s *StructType) groupBy(fn FieldGroupFunc) {
+	s.fieldGroup = make(map[string][]*FieldType, len(s.fields))
+	for _, field := range s.fields {
+		group, ok := fn(field)
+		if ok {
+			a := s.fieldGroup[group]
+			s.fieldGroup[group] = append(a, field)
 		}
 	}
 }

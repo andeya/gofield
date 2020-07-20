@@ -36,7 +36,7 @@ func TestGofield1(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := s.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Subtags.String())
+		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	for _, id := range ids {
@@ -64,7 +64,7 @@ func TestGofield2(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := st.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Subtags.String())
+		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1
@@ -94,7 +94,7 @@ func TestGofield3(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := st.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Subtags.String())
+		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1
@@ -297,4 +297,122 @@ func BenchmarkReflect2(b *testing.B) {
 	assert.Equal(b, 7, p.E)
 	assert.Equal(b, 8, *p.f)
 	assert.Equal(b, 999, **p.g)
+}
+
+type G struct {
+	Apple  string `mapper:"a"`
+	banana int    `mapper:"b"`
+	C      string `mapper:"c"`
+	D      string `mapper:"d"`
+	E      string `mapper:"e"`
+	E2     string `mapper:"e"`
+	E3     string `mapper:"e"`
+	E4     string `mapper:"e"`
+	E5     string `mapper:"e"`
+}
+
+func BenchmarkTag_Group1(b *testing.B) {
+	b.ReportAllocs()
+
+	maker := func(ft *gofield.FieldType) (string, bool) {
+		tag, ok := ft.Tag.Lookup("mapper")
+		return tag, ok
+	}
+	accessor := gofield.New(gofield.WithGroupBy(maker))
+
+	var p G
+	p.Apple = "red"
+	p.banana = 7
+	s := accessor.MustAccess(&p)
+	assert.Equal(b, "red", s.GroupValues("a")[0].String())
+	assert.Equal(b, 7, int(s.GroupValues("b")[0].Int()))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s = accessor.MustAccess(&p)
+		a := s.GroupValues("a")
+		for _, value := range a {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		b := s.GroupValues("b")
+		for _, value := range b {
+			_ = value.Int()
+		}
+		c := s.GroupValues("c")
+		for _, value := range c {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		d := s.GroupValues("d")
+		for _, value := range d {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		e := s.GroupValues("e")
+		for _, value := range e {
+			_ = value.String()
+			value.SetString("a1")
+		}
+	}
+	b.StopTimer()
+}
+
+func BenchmarkTag_Reflect1(b *testing.B) {
+	b.ReportAllocs()
+	var get func(tagName string, i interface{}) []reflect.Value
+	get = func(tagName string, i interface{}) []reflect.Value {
+		var r []reflect.Value
+		val := reflect.ValueOf(i)
+		for val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+		if val.Kind() != reflect.Struct {
+			panic("")
+		}
+		typ := val.Type()
+		mum := typ.NumField()
+		for i := 0; i < mum; i++ {
+			ft := typ.Field(i)
+			if ft.Tag.Get("mapper") == tagName {
+				r = append(r, val.Field(i))
+			}
+		}
+		return r
+	}
+
+	var p G
+	p.Apple = "red"
+	p.banana = 7
+	assert.Equal(b, "red", get("a", &p)[0].String())
+	assert.Equal(b, 7, int(get("b", &p)[0].Int()))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a := get("a", &p)
+		for _, value := range a {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		b := get("b", &p)
+		for _, value := range b {
+			_ = value.Int()
+		}
+		c := get("c", &p)
+		for _, value := range c {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		d := get("d", &p)
+		for _, value := range d {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		e := get("e", &p)
+		for _, value := range e {
+			_ = value.String()
+			value.SetString("a1")
+		}
+	}
+	b.StopTimer()
 }

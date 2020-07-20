@@ -7,7 +7,7 @@ High-performance struct field accessor based on unsafe pointers.
 - Support to operate of non-exported fields
 - Use unsafe and pre-analysis of types to improve performance
 
-## Compare
+## Compare1
 
 - benchmark result
 ```sh
@@ -128,23 +128,142 @@ func BenchmarkReflect(b *testing.B) {
 }
 ```
 
-## Mapper
+## Compare2
 
-- example
+- benchmark result
+```sh
+goos: darwin
+goarch: amd64
+pkg: github.com/henrylee2cn/gofield
+BenchmarkTag_Group1-4            1310958               884 ns/op             608 B/op          7 allocs/op
+BenchmarkTag_Reflect1-4           213937              5381 ns/op             856 B/op         53 allocs/op
+PASS
+```
+
+- struct example
 
 ```go
-func TestMapper1(t *testing.T) {
+type G struct {
+	Apple  string `mapper:"a"`
+	banana int    `mapper:"b"`
+	C      string `mapper:"c"`
+	D      string `mapper:"d"`
+	E      string `mapper:"e"`
+	E2     string `mapper:"e"`
+	E3     string `mapper:"e"`
+	E4     string `mapper:"e"`
+	E5     string `mapper:"e"`
+}
+```
+
+- gofield example
+```go
+func BenchmarkTag_Group1(b *testing.B) {
+	b.ReportAllocs()
+
 	maker := func(ft *gofield.FieldType) (string, bool) {
 		tag, ok := ft.Tag.Lookup("mapper")
 		return tag, ok
 	}
-	mapper := gofield.NewMapper(maker)
+	accessor := gofield.New(gofield.WithGroupBy(maker))
 
-	var p M
+	var p G
 	p.Apple = "red"
 	p.banana = 7
-	m := mapper.MustMake(&p)
-	assert.Equal(t, "red", m["a"].String())
-	assert.Equal(t, 7, int(m["b"].Int()))
+	s := accessor.MustAccess(&p)
+	assert.Equal(b, "red", s.GroupValues("a")[0].String())
+	assert.Equal(b, 7, int(s.GroupValues("b")[0].Int()))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s = accessor.MustAccess(&p)
+		a := s.GroupValues("a")
+		for _, value := range a {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		b := s.GroupValues("b")
+		for _, value := range b {
+			_ = value.Int()
+		}
+		c := s.GroupValues("c")
+		for _, value := range c {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		d := s.GroupValues("d")
+		for _, value := range d {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		e := s.GroupValues("e")
+		for _, value := range e {
+			_ = value.String()
+			value.SetString("a1")
+		}
+	}
+	b.StopTimer()
+}
+```
+
+- reflect example
+```go
+func BenchmarkTag_Reflect1(b *testing.B) {
+	b.ReportAllocs()
+	var get func(tagName string, i interface{}) []reflect.Value
+	get = func(tagName string, i interface{}) []reflect.Value {
+		var r []reflect.Value
+		val := reflect.ValueOf(i)
+		for val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+		if val.Kind() != reflect.Struct {
+			panic("")
+		}
+		typ := val.Type()
+		mum := typ.NumField()
+		for i := 0; i < mum; i++ {
+			ft := typ.Field(i)
+			if ft.Tag.Get("mapper") == tagName {
+				r = append(r, val.Field(i))
+			}
+		}
+		return r
+	}
+
+	var p G
+	p.Apple = "red"
+	p.banana = 7
+	assert.Equal(b, "red", get("a", &p)[0].String())
+	assert.Equal(b, 7, int(get("b", &p)[0].Int()))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a := get("a", &p)
+		for _, value := range a {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		b := get("b", &p)
+		for _, value := range b {
+			_ = value.Int()
+		}
+		c := get("c", &p)
+		for _, value := range c {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		d := get("d", &p)
+		for _, value := range d {
+			_ = value.String()
+			value.SetString("a1")
+		}
+		e := get("e", &p)
+		for _, value := range e {
+			_ = value.String()
+			value.SetString("a1")
+		}
+	}
+	b.StopTimer()
 }
 ```
