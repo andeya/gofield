@@ -54,7 +54,9 @@ var (
 	store = &StructTypeStore{
 		dict: make(map[int32]*StructType, 1024),
 	}
-	zero reflect.Value
+	zero            = reflect.Value{}
+	errTypeMismatch = errors.New("type mismatch")
+	errIllegalType  = errors.New("type is not struct pointer")
 )
 
 //go:nosplit
@@ -72,25 +74,56 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Unlock()
 }
 
+// MustAnalyze analyze the struct and return its type info.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
+//go:nosplit
+func MustAnalyze(structPtr interface{}) *StructType {
+	s, err := Analyze(structPtr)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
 // Analyze analyze the struct and return its type info.
 //go:nosplit
 func Analyze(structPtr interface{}) (*StructType, error) {
-	tid, _, err := parseStructPtrWithCheck(structPtr)
+	tid, _, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
+	return analyze(tid, structPtr), nil
+}
+
+//go:nosplit
+func analyze(tid int32, structPtr interface{}) *StructType {
 	sTyp, ok := store.load(tid)
 	if !ok {
 		sTyp = newStructType(tid, structPtr)
 		store.store(sTyp)
 	}
-	return sTyp, nil
+	return sTyp
 }
 
-// AccessWithErr analyze the struct type info and create struct accessor.
+// MustAccess analyze the struct type info and create struct accessor.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
-func AccessWithErr(structPtr interface{}) (*Struct, error) {
-	tid, ptr, err := parseStructPtrWithCheck(structPtr)
+func MustAccess(structPtr interface{}) *Struct {
+	tid, ptr := parseStructInfo(structPtr)
+	sTyp, ok := store.load(tid)
+	if !ok {
+		sTyp = newStructType(tid, structPtr)
+		store.store(sTyp)
+	}
+	return newStruct(sTyp, ptr)
+}
+
+// Access analyze the struct type info and create struct accessor.
+//go:nosplit
+func Access(structPtr interface{}) (*Struct, error) {
+	tid, ptr, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
@@ -102,40 +135,26 @@ func AccessWithErr(structPtr interface{}) (*Struct, error) {
 	return newStruct(sTyp, ptr), nil
 }
 
-// Access analyze the struct type info and create struct accessor.
+// MustAccess create a new struct accessor.
 // NOTE:
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
-func Access(structPtr interface{}) *Struct {
-	tid, ptr := parseStructPtr(structPtr)
-	sTyp, ok := store.load(tid)
-	if !ok {
-		sTyp = newStructType(tid, structPtr)
-		store.store(sTyp)
+func (s *StructType) MustAccess(structPtr interface{}) *Struct {
+	a, err := s.Access(structPtr)
+	if err != nil {
+		panic(err)
 	}
-	return newStruct(sTyp, ptr)
+	return a
 }
 
-// AccessWithErr create a new struct accessor.
+// MustAccess create a new struct accessor.
 //go:nosplit
-func (s *StructType) AccessWithErr(structPtr interface{}) (*Struct, error) {
-	tid, ptr := parseStructPtr(structPtr)
+func (s *StructType) Access(structPtr interface{}) (*Struct, error) {
+	tid, ptr := parseStructInfo(structPtr)
 	if s.tid != tid {
-		return nil, errors.New("type mismatch")
+		return nil, errTypeMismatch
 	}
 	return newStruct(s, ptr), nil
-}
-
-// Access create a new struct accessor.
-// NOTE:
-//  If structPtr is not a struct pointer, it will cause panic.
-//go:nosplit
-func (s *StructType) Access(structPtr interface{}) *Struct {
-	tid, ptr := parseStructPtr(structPtr)
-	if s.tid != tid {
-		panic("type mismatch")
-	}
-	return newStruct(s, ptr)
 }
 
 //go:nosplit

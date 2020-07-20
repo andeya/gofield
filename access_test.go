@@ -30,7 +30,7 @@ type (
 
 func TestGofield1(t *testing.T) {
 	var p P1
-	s, err := gofield.AccessWithErr(&p)
+	s, err := gofield.Access(&p)
 	assert.NoError(t, err)
 	ids := s.Filter(func(f *gofield.FieldType) bool {
 		return f.UnderlyingKind() == reflect.Int
@@ -68,7 +68,7 @@ func TestGofield2(t *testing.T) {
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1
-	s := st.Access(&p)
+	s := st.MustAccess(&p)
 	for _, id := range ids {
 		v := s.FieldValue(id)
 		v.SetInt(int64(id + 1))
@@ -98,7 +98,7 @@ func TestGofield3(t *testing.T) {
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1
-	s := st.Access(reflect.ValueOf(&p))
+	s := st.MustAccess(reflect.ValueOf(&p))
 	for _, id := range ids {
 		v := s.FieldValue(id)
 		v.SetInt(int64(id + 1))
@@ -120,7 +120,7 @@ func TestGofield3(t *testing.T) {
 func BenchmarkGofield1(b *testing.B) {
 	b.ReportAllocs()
 	var p P1
-	s := gofield.Access(&p)
+	s := gofield.MustAccess(&p)
 	ids := s.Filter(func(t *gofield.FieldType) bool {
 		return t.UnderlyingKind() == reflect.Int
 	})
@@ -199,7 +199,7 @@ func BenchmarkReflect1(b *testing.B) {
 func BenchmarkGofield2(b *testing.B) {
 	b.ReportAllocs()
 	var p P1
-	s := gofield.Access(&p)
+	s := gofield.MustAccess(&p)
 	ids := s.Filter(func(t *gofield.FieldType) bool {
 		return t.UnderlyingKind() == reflect.Int
 	})
@@ -217,7 +217,7 @@ func BenchmarkGofield2(b *testing.B) {
 			v.SetInt(999)
 		}
 		var p P1
-		s = gofield.Access(&p)
+		s = gofield.MustAccess(&p)
 	}
 	b.StopTimer()
 

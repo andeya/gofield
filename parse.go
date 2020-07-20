@@ -1,16 +1,37 @@
 package gofield
 
 import (
-	"errors"
 	"reflect"
 
 	"github.com/henrylee2cn/ameda"
 )
 
-func parseStructPtr(structPtr interface{}) (int32, uintptr) {
-	if j, ok := structPtr.(reflect.Value); ok {
+// func parseStructPtr(structPtr interface{}) uintptr {
+// 	if val, ok := structPtr.(reflect.Value); ok {
+// 		return val.Pointer()
+// 	}
+// 	val := ameda.ValueOf(structPtr)
+// 	return val.Pointer()
+// }
+
+func parseStructPtrWithCheck(structPtr interface{}) (uintptr, error) {
+	if val, ok := structPtr.(reflect.Value); ok {
+		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+			return 0, errIllegalType
+		}
+		return val.Pointer(), nil
+	}
+	val := ameda.ValueOf(structPtr)
+	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+		return 0, errIllegalType
+	}
+	return val.Pointer(), nil
+}
+
+func parseStructInfo(structPtr interface{}) (int32, uintptr) {
+	if val, ok := structPtr.(reflect.Value); ok {
 		tid := ameda.RuntimeTypeIDOf(structPtr)
-		ptr := j.Pointer()
+		ptr := val.Pointer()
 		return tid, ptr
 	}
 	val := ameda.ValueOf(structPtr)
@@ -19,18 +40,18 @@ func parseStructPtr(structPtr interface{}) (int32, uintptr) {
 	return tid, ptr
 }
 
-func parseStructPtrWithCheck(structPtr interface{}) (int32, uintptr, error) {
-	if j, ok := structPtr.(reflect.Value); ok {
-		if j.Kind() != reflect.Ptr || j.Elem().Kind() != reflect.Struct {
-			return 0, 0, errors.New("type is not struct pointer")
+func parseStructInfoWithCheck(structPtr interface{}) (int32, uintptr, error) {
+	if val, ok := structPtr.(reflect.Value); ok {
+		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+			return 0, 0, errIllegalType
 		}
 		tid := ameda.RuntimeTypeIDOf(structPtr)
-		ptr := j.Pointer()
+		ptr := val.Pointer()
 		return tid, ptr, nil
 	}
 	val := ameda.ValueOf(structPtr)
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return 0, 0, errors.New("type is not struct pointer")
+		return 0, 0, errIllegalType
 	}
 	tid := val.RuntimeTypeID()
 	ptr := val.Pointer()

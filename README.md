@@ -48,7 +48,7 @@ type (
 func BenchmarkGofield(b *testing.B) {
 	b.ReportAllocs()
 	var p P1
-	s := gofield.Access(&p)
+	s := gofield.MustAccess(&p)
 	ids := s.Filter(func(t *gofield.FieldType) bool {
 		return t.UnderlyingKind() == reflect.Int
 	})
