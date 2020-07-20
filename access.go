@@ -137,7 +137,7 @@ func Access(structPtr interface{}) (*Struct, error) {
 
 // MustAccess create a new struct accessor.
 // NOTE:
-//  If structPtr is not a struct pointer, it will cause panic.
+//  If structPtr is not a struct pointer or type mismatch, it will cause panic.
 //go:nosplit
 func (s *StructType) MustAccess(structPtr interface{}) *Struct {
 	a, err := s.Access(structPtr)
@@ -147,7 +147,7 @@ func (s *StructType) MustAccess(structPtr interface{}) *Struct {
 	return a
 }
 
-// MustAccess create a new struct accessor.
+// Access create a new struct accessor.
 //go:nosplit
 func (s *StructType) Access(structPtr interface{}) (*Struct, error) {
 	tid, ptr := parseStructInfo(structPtr)
