@@ -70,9 +70,9 @@ func (s *StructTypeStore) store(sTyp *StructType) {
 	s.Unlock()
 }
 
-// Prepare pre-analyze the struct type info and cache the results.
+// AccessWithErr analyze the struct type info and create struct accessor.
 //go:nosplit
-func Prepare(structPtr interface{}) error {
+func AccessWithErr(structPtr interface{}) (*Struct, error) {
 	var val ameda.Value
 	switch j := structPtr.(type) {
 	case reflect.Value:
@@ -81,16 +81,15 @@ func Prepare(structPtr interface{}) error {
 		val = ameda.ValueOf(structPtr)
 	}
 	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
-		return errors.New("type is not struct pointer")
+		return nil, errors.New("type is not struct pointer")
 	}
 	tid := val.RuntimeTypeID()
-	_, ok := store.load(tid)
-	if ok {
-		return nil
+	sTyp, ok := store.load(tid)
+	if !ok {
+		sTyp = newStructType(structPtr)
+		store.store(sTyp)
 	}
-	sTyp := newStructType(structPtr)
-	store.store(sTyp)
-	return nil
+	return newStruct(sTyp, val.Pointer()), nil
 }
 
 // Access analyze the struct type info and create struct accessor.

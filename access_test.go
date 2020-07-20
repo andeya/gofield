@@ -30,7 +30,8 @@ type (
 
 func TestGofield(t *testing.T) {
 	var p P1
-	s := gofield.Access(&p)
+	s, err := gofield.AccessWithErr(&p)
+	assert.NoError(t, err)
 	ids := s.Filter(func(f *gofield.FieldType) bool {
 		return f.UnderlyingKind() == reflect.Int
 	})
