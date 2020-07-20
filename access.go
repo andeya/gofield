@@ -94,6 +94,8 @@ func Prepare(structPtr interface{}) error {
 }
 
 // Access analyze the struct type info and create struct accessor.
+// NOTE:
+//  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func Access(structPtr interface{}) *Struct {
 	var val ameda.Value
