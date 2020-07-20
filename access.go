@@ -187,9 +187,9 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	}
 }
 
-// RuntimeID get the runtime id of struct.
+// RuntimeTypeID get the runtime type id of struct.
 //go:nosplit
-func (s *StructType) RuntimeID() int32 {
+func (s *StructType) RuntimeTypeID() int32 {
 	return s.tid
 }
 
