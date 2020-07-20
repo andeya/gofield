@@ -3,10 +3,12 @@ package gofield_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/henrylee2cn/gofield"
 )
 
-func TestBind1(t *testing.T) {
+func TestMapper1(t *testing.T) {
 	maker := func(ft *gofield.FieldType) (string, bool) {
 		tag, err := ft.Subtags.Get("mapper")
 		if err != nil {
@@ -23,8 +25,7 @@ func TestBind1(t *testing.T) {
 	var p P
 	p.Apple = "red"
 	p.banana = 7
-	m := mapper.MustGet(&p)
-	for k, v := range m {
-		t.Logf("key=%s, value=%v", k, v.Interface())
-	}
+	m := mapper.MustParse(&p)
+	assert.Equal(t, "red", m["a"].String())
+	assert.Equal(t, 7, int(m["b"].Int()))
 }

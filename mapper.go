@@ -30,8 +30,8 @@ func NewMapper(fn KeyMaker) *Mapper {
 }
 
 //go:nosplit
-func (b *Mapper) MustGet(structPtr interface{}) map[string]reflect.Value {
-	m, err := b.Get(structPtr)
+func (b *Mapper) MustParse(structPtr interface{}) map[string]reflect.Value {
+	m, err := b.Parse(structPtr)
 	if err != nil {
 		panic(err)
 	}
@@ -39,26 +39,26 @@ func (b *Mapper) MustGet(structPtr interface{}) map[string]reflect.Value {
 }
 
 //go:nosplit
-func (b *Mapper) Get(structPtr interface{}) (map[string]reflect.Value, error) {
+func (b *Mapper) Parse(structPtr interface{}) (map[string]reflect.Value, error) {
 	tid := ameda.RuntimeTypeIDOf(structPtr)
 	b.mutex.RLock()
 	m, ok := b.structTypes[tid]
 	b.mutex.RUnlock()
 	if ok {
-		return m.Get(structPtr)
+		return m.Parse(structPtr)
 	}
 	m, s, err := b.initStruct(tid, structPtr)
 	if err != nil {
 		return nil, err
 	}
-	return m.get(s), nil
+	return m.parse(s), nil
 }
 
 // NOTE:
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
-func (m *StructMap) MustGet(structPtr interface{}) map[string]reflect.Value {
-	r, err := m.Get(structPtr)
+func (m *StructMap) MustParse(structPtr interface{}) map[string]reflect.Value {
+	r, err := m.Parse(structPtr)
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +66,7 @@ func (m *StructMap) MustGet(structPtr interface{}) map[string]reflect.Value {
 }
 
 //go:nosplit
-func (m *StructMap) Get(structPtr interface{}) (map[string]reflect.Value, error) {
+func (m *StructMap) Parse(structPtr interface{}) (map[string]reflect.Value, error) {
 	tid, ptr, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
@@ -75,11 +75,11 @@ func (m *StructMap) Get(structPtr interface{}) (map[string]reflect.Value, error)
 		return nil, errTypeMismatch
 	}
 	s := newStruct(m.t, ptr)
-	return m.get(s), nil
+	return m.parse(s), nil
 }
 
 //go:nosplit
-func (m *StructMap) get(s *Struct) map[string]reflect.Value {
+func (m *StructMap) parse(s *Struct) map[string]reflect.Value {
 	num := s.NumField()
 	r := make(map[string]reflect.Value, num)
 	for key, fid := range m.m {
