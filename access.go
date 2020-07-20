@@ -13,7 +13,7 @@ import (
 type (
 	// Struct struct accessor
 	Struct struct {
-		typ         *StructType
+		*StructType
 		value       Value
 		fieldValues []Value // idx is int
 	}
@@ -116,7 +116,7 @@ func Access(structPtr interface{}) *Struct {
 //go:nosplit
 func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	return &Struct{
-		typ: typ,
+		StructType: typ,
 		value: Value{
 			elemPtr: elemPtr,
 		},
@@ -126,23 +126,23 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 
 // RuntimeID get the runtime id of struct.
 //go:nosplit
-func (s *Struct) RuntimeID() int32 {
-	return s.typ.tid
+func (s *StructType) RuntimeID() int32 {
+	return s.tid
 }
 
 // NumField get the number of fields.
 //go:nosplit
-func (s *Struct) NumField() int {
-	return len(s.typ.fields)
+func (s *StructType) NumField() int {
+	return len(s.fields)
 }
 
 // FieldType get the field type info corresponding to the id.
 //go:nosplit
-func (s *Struct) FieldType(id int) *FieldType {
+func (s *StructType) FieldType(id int) *FieldType {
 	if !s.checkID(id) {
 		return nil
 	}
-	return s.typ.fields[id]
+	return s.fields[id]
 }
 
 // FieldValue get the field value corresponding to the id.
@@ -155,7 +155,7 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 	if v.elemPtr > 0 {
 		return v.elemVal
 	}
-	return s.typ.fields[id].init(s).elemVal
+	return s.StructType.fields[id].init(s).elemVal
 }
 
 // Field get the field type and value corresponding to the id.
@@ -164,7 +164,7 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 	if !s.checkID(id) {
 		return nil, zero
 	}
-	t := s.typ.fields[id]
+	t := s.StructType.fields[id]
 	v := s.fieldValues[id]
 	if v.elemPtr > 0 {
 		return t, v.elemVal
@@ -174,9 +174,9 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 
 // Filter filter all fields and return a list of their ids.
 //go:nosplit
-func (s *Struct) Filter(fn func(*FieldType) bool) []int {
+func (s *StructType) Filter(fn func(*FieldType) bool) []int {
 	list := make([]int, 0, s.NumField())
-	for id, field := range s.typ.fields {
+	for id, field := range s.fields {
 		if fn(field) {
 			list = append(list, id)
 		}
@@ -185,8 +185,8 @@ func (s *Struct) Filter(fn func(*FieldType) bool) []int {
 }
 
 //go:nosplit
-func (s *Struct) checkID(id int) bool {
-	return id >= 0 && id < len(s.fieldValues)
+func (s *StructType) checkID(id int) bool {
+	return id >= 0 && id < len(s.fields)
 }
 
 func (f *FieldType) init(s *Struct) Value {
