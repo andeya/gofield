@@ -50,7 +50,7 @@ type (
 
 var (
 	store = &StructTypeStore{
-		dict: make(map[int32]*StructType, 128),
+		dict: make(map[int32]*StructType, 1024),
 	}
 	zero reflect.Value
 )
