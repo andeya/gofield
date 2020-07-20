@@ -25,7 +25,7 @@ func TestMapper1(t *testing.T) {
 	var p P
 	p.Apple = "red"
 	p.banana = 7
-	m := mapper.MustParse(&p)
+	m := mapper.MustMake(&p)
 	assert.Equal(t, "red", m["a"].String())
 	assert.Equal(t, 7, int(m["b"].Int()))
 }
