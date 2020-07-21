@@ -42,6 +42,7 @@ type (
 		ptrNum   int
 		elemTyp  reflect.Type
 		reflect.StructField
+		hidden bool
 	}
 	// Value field value
 	Value struct {
@@ -275,9 +276,14 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 }
 
 // Range traverse all fields, and exit the traversal when fn returns false.
+// NOTE:
+//  automatically skip hidden fields
 //go:nosplit
 func (s *Struct) Range(fn func(*FieldType, reflect.Value) bool) {
 	for id, t := range s.fields {
+		if t.hidden {
+			continue
+		}
 		v := s.fieldValues[id]
 		if v.elemPtr > 0 {
 			if !fn(t, v.elemVal) {
@@ -373,6 +379,13 @@ func (f *FieldType) Deep() int {
 	return f.deep
 }
 
+// Hidden determine whether the field is hidden,
+// the hidden field will be automatically skipped by the *Struct.Range method.
+//go:nosplit
+func (f *FieldType) Hidden() bool {
+	return f.hidden
+}
+
 // Kind get the field kind.
 //go:nosplit
 func (f *FieldType) Kind() reflect.Kind {
@@ -440,7 +453,9 @@ L:
 				if elemTyp.Kind() == reflect.Struct {
 					structFields = append(structFields, field)
 				}
-			case SkipSelf:
+			case Hide:
+				field.hidden = true
+				s.fields = append(s.fields, field)
 				if elemTyp.Kind() == reflect.Struct {
 					structFields = append(structFields, field)
 				}

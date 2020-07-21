@@ -127,7 +127,7 @@ func TestGofield4(t *testing.T) {
 		case reflect.Int:
 			return gofield.Take
 		case reflect.Struct:
-			return gofield.SkipSelf
+			return gofield.Hide
 		default:
 			return gofield.Skip
 		}
@@ -138,11 +138,11 @@ func TestGofield4(t *testing.T) {
 		v.SetInt(int64(t.ID() + 1))
 		return true
 	})
-	assert.Equal(t, 4, s.NumField())
+	assert.Equal(t, 5, s.NumField())
 	assert.Equal(t, 1, p.A)
 	assert.Equal(t, 2, p.b)
-	assert.Equal(t, 3, p.C)
-	assert.Equal(t, 4, *p.d)
+	assert.Equal(t, 4, p.C)
+	assert.Equal(t, 5, *p.d)
 }
 
 func BenchmarkGofield1(b *testing.B) {

@@ -14,8 +14,8 @@ type (
 const (
 	// Take take the field
 	Take IterPolicy = iota
-	// SkipSelf skip the field, but not skip its subfields
-	SkipSelf
+	// Hide does not appear in the range
+	Hide
 	// SkipOffspring accept the field, but skip its subfields
 	SkipOffspring
 	// Skip skip the field and its subfields
