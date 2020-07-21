@@ -36,7 +36,7 @@ func TestGofield1(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := s.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
+		t.Logf("fid=%d, selector=%s tag=%s", f.ID(), f.Selector(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	for _, id := range ids {
@@ -65,7 +65,7 @@ func TestGofield2(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := st.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
+		t.Logf("fid=%d, selector=%s tag=%s", f.ID(), f.Selector(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1
@@ -95,7 +95,7 @@ func TestGofield3(t *testing.T) {
 		return f.UnderlyingKind() == reflect.Int
 	})
 	ids2 := st.Filter(func(f *gofield.FieldType) bool {
-		t.Logf("fid=%d, fullpath=%s tag=%s", f.ID(), f.FullPath(), f.Tag)
+		t.Logf("fid=%d, selector=%s tag=%s", f.ID(), f.Selector(), f.Tag)
 		return f.Tag.Get("fe") == "target"
 	})
 	var p P1

@@ -35,7 +35,7 @@ type (
 	// FieldType field type info
 	FieldType struct {
 		id       int
-		fullPath string
+		selector string
 		reflect.StructField
 		ptrNum  int
 		elemTyp reflect.Type
@@ -352,10 +352,10 @@ func (f *FieldType) ID() int {
 	return f.id
 }
 
-// FullPath get the field full path.
+// Selector get the field full path.
 //go:nosplit
-func (f *FieldType) FullPath() string {
-	return f.fullPath
+func (f *FieldType) Selector() string {
+	return f.selector
 }
 
 // Kind get the field kind.
@@ -409,7 +409,7 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 		}
 		field := &FieldType{
 			id:          baseId + i, // 0, 1, 2, ...
-			fullPath:    joinFieldName(parent.fullPath, f.Name),
+			selector:    joinFieldName(parent.selector, f.Name),
 			StructField: f,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
@@ -436,8 +436,5 @@ func (s *StructType) groupBy(fn FieldGroupFunc) {
 
 //go:nosplit
 func joinFieldName(parentPath, name string) string {
-	if parentPath == "" {
-		return name
-	}
 	return parentPath + "." + name
 }
