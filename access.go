@@ -550,8 +550,13 @@ func (s *StructType) FieldTree() []*FieldType {
 }
 
 // Parent return the parent field.
+// NOTE:
+//  may return nil
 //go:nosplit
 func (f *FieldType) Parent() *FieldType {
+	if f.parent == nil || f.parent.id == rootID {
+		return nil
+	}
 	return f.parent
 }
 
