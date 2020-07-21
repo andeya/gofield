@@ -62,36 +62,38 @@ var (
 )
 
 // WithGroupBy set FieldGroupFunc to *Accessor.
+//go:nosplit
 func WithGroupBy(fn FieldGroupFunc) Option {
-	return func(g *Accessor) {
-		g.groupFunc = fn
+	return func(a *Accessor) {
+		a.groupFunc = fn
 	}
 }
 
 // New create a new struct accessor factory.
+//go:nosplit
 func New(opt ...Option) *Accessor {
-	g := &Accessor{
+	a := &Accessor{
 		dict: make(map[int32]*StructType, 1024),
 	}
 	for _, fn := range opt {
-		fn(g)
+		fn(a)
 	}
-	return g
+	return a
 }
 
 //go:nosplit
-func (s *Accessor) load(tid int32) (*StructType, bool) {
-	s.rw.RLock()
-	sTyp, ok := s.dict[tid]
-	s.rw.RUnlock()
+func (a *Accessor) load(tid int32) (*StructType, bool) {
+	a.rw.RLock()
+	sTyp, ok := a.dict[tid]
+	a.rw.RUnlock()
 	return sTyp, ok
 }
 
 //go:nosplit
-func (s *Accessor) store(sTyp *StructType) {
-	s.rw.Lock()
-	s.dict[sTyp.tid] = sTyp
-	s.rw.Unlock()
+func (a *Accessor) store(sTyp *StructType) {
+	a.rw.Lock()
+	a.dict[sTyp.tid] = sTyp
+	a.rw.Unlock()
 }
 
 // MustAnalyze analyze the struct and return its type info.
@@ -106,8 +108,8 @@ func MustAnalyze(structPtr interface{}) *StructType {
 // NOTE:
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
-func (g *Accessor) MustAnalyze(structPtr interface{}) *StructType {
-	s, err := g.Analyze(structPtr)
+func (a *Accessor) MustAnalyze(structPtr interface{}) *StructType {
+	s, err := a.Analyze(structPtr)
 	if err != nil {
 		panic(err)
 	}
@@ -122,20 +124,20 @@ func Analyze(structPtr interface{}) (*StructType, error) {
 
 // Analyze analyze the struct and return its type info.
 //go:nosplit
-func (g *Accessor) Analyze(structPtr interface{}) (*StructType, error) {
+func (a *Accessor) Analyze(structPtr interface{}) (*StructType, error) {
 	tid, _, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
-	return g.analyze(tid, structPtr), nil
+	return a.analyze(tid, structPtr), nil
 }
 
 //go:nosplit
-func (g *Accessor) analyze(tid int32, structPtr interface{}) *StructType {
-	sTyp, ok := g.load(tid)
+func (a *Accessor) analyze(tid int32, structPtr interface{}) *StructType {
+	sTyp, ok := a.load(tid)
 	if !ok {
-		sTyp = g.newStructType(tid, structPtr)
-		g.store(sTyp)
+		sTyp = a.newStructType(tid, structPtr)
+		a.store(sTyp)
 	}
 	return sTyp
 }
@@ -152,12 +154,12 @@ func MustAccess(structPtr interface{}) *Struct {
 // NOTE:
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
-func (g *Accessor) MustAccess(structPtr interface{}) *Struct {
+func (a *Accessor) MustAccess(structPtr interface{}) *Struct {
 	tid, ptr := parseStructInfo(structPtr)
-	sTyp, ok := g.load(tid)
+	sTyp, ok := a.load(tid)
 	if !ok {
-		sTyp = g.newStructType(tid, structPtr)
-		g.store(sTyp)
+		sTyp = a.newStructType(tid, structPtr)
+		a.store(sTyp)
 	}
 	return newStruct(sTyp, ptr)
 }
@@ -170,15 +172,15 @@ func Access(structPtr interface{}) (*Struct, error) {
 
 // Access analyze the struct type info and create struct accessor.
 //go:nosplit
-func (g *Accessor) Access(structPtr interface{}) (*Struct, error) {
+func (a *Accessor) Access(structPtr interface{}) (*Struct, error) {
 	tid, ptr, err := parseStructInfoWithCheck(structPtr)
 	if err != nil {
 		return nil, err
 	}
-	sTyp, ok := g.load(tid)
+	sTyp, ok := a.load(tid)
 	if !ok {
-		sTyp = g.newStructType(tid, structPtr)
-		g.store(sTyp)
+		sTyp = a.newStructType(tid, structPtr)
+		a.store(sTyp)
 	}
 	return newStruct(sTyp, ptr), nil
 }
@@ -371,7 +373,7 @@ func (f *FieldType) UnderlyingKind() reflect.Kind {
 }
 
 //go:nosplit
-func (g *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
+func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 	v, ok := structPtr.(reflect.Value)
 	if !ok {
 		v = reflect.ValueOf(structPtr)
@@ -384,8 +386,8 @@ func (g *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 		fields:   make([]*FieldType, 0, 16),
 	}
 	sTyp.parseFields(&FieldType{}, structTyp)
-	if g.groupFunc != nil {
-		sTyp.groupBy(g.groupFunc)
+	if a.groupFunc != nil {
+		sTyp.groupBy(a.groupFunc)
 	}
 	return sTyp
 }
