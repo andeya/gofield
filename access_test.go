@@ -56,6 +56,11 @@ func TestGofield1(t *testing.T) {
 	assert.Equal(t, 7, p.E)
 	assert.Equal(t, 8, *p.f)
 	assert.Equal(t, 999, **p.g)
+
+	t.Logf("\n%s", s.StructType.String())
+	for _, fieldType := range s.StructType.FieldTree() {
+		t.Logf("\n%s", fieldType.String())
+	}
 }
 
 func TestGofield2(t *testing.T) {
@@ -121,7 +126,7 @@ func TestGofield3(t *testing.T) {
 func TestGofield4(t *testing.T) {
 	accessor := gofield.New(gofield.WithIterator(func(ft *gofield.FieldType) gofield.IterPolicy {
 		if ft.Name == "P3" {
-			return gofield.Stop
+			return gofield.SkipAndStop
 		}
 		switch ft.UnderlyingKind() {
 		case reflect.Int:

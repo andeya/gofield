@@ -1,7 +1,9 @@
 package gofield
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -27,23 +29,24 @@ type (
 	// StructType struct type info
 	StructType struct {
 		tid        int32
-		elemType   reflect.Type
 		fields     []*FieldType
 		fieldGroup map[string][]*FieldType
 		depth      int
+		tree       *FieldType // id = -1
 	}
 	// FieldID id assigned to each field in sequence
 	FieldID = int
 	// FieldType field type info
 	FieldType struct {
-		parent   *FieldType
 		id       int
 		selector string
 		deep     int
 		ptrNum   int
 		elemTyp  reflect.Type
+		hidden   bool
+		parent   *FieldType
+		children []*FieldType
 		reflect.StructField
-		hidden bool
 	}
 	// Value field value
 	Value struct {
@@ -51,6 +54,8 @@ type (
 		elemPtr uintptr
 	}
 )
+
+const rootID = -1
 
 var (
 	defaultAccessor = New()
@@ -373,6 +378,42 @@ func (f *FieldType) Selector() string {
 	return f.selector
 }
 
+// String dump the id and selector on the field tree.
+//go:nosplit
+func (s *StructType) String() string {
+	return s.Dump()
+}
+
+// Dump dump the id and selector on the field tree.
+//go:nosplit
+func (s *StructType) Dump() string {
+	return s.tree.dump("")
+}
+
+// String dump the id and selector on the field subtree.
+//go:nosplit
+func (f *FieldType) String() string {
+	return f.Dump()
+}
+
+// Dump dump the id and selector on the field subtree.
+//go:nosplit
+func (f *FieldType) Dump() string {
+	return f.dump("")
+}
+
+func (f *FieldType) dump(prefix string) string {
+	var buf bytes.Buffer
+	if f.id != rootID {
+		buf.WriteString(fmt.Sprintf("%sid=%d selector=%s\n", prefix, f.id, f.selector))
+		prefix += "····"
+	}
+	for _, child := range f.children {
+		buf.WriteString(child.dump(prefix))
+	}
+	return buf.String()
+}
+
 // Deep get the nesting depth of the field.
 //go:nosplit
 func (f *FieldType) Deep() int {
@@ -407,11 +448,11 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 	v = ameda.DereferencePtrValue(v)
 	structTyp := v.Type()
 	sTyp := &StructType{
-		tid:      tid,
-		elemType: structTyp,
-		fields:   make([]*FieldType, 0, 16),
+		tid:    tid,
+		fields: make([]*FieldType, 0, 16),
+		tree:   &FieldType{id: rootID, elemTyp: structTyp},
 	}
-	sTyp.traversalFields(a.maxDeep, a.iterator, &FieldType{elemTyp: structTyp})
+	sTyp.traversalFields(a.maxDeep, a.iterator, sTyp.tree)
 	if a.groupBy != nil {
 		sTyp.groupBy(a.groupBy)
 	}
@@ -445,28 +486,40 @@ L:
 			StructField: f,
 		}
 		if iterator != nil {
-			switch iterator(field) {
+			switch p := iterator(field); p {
 			default:
 				fallthrough
-			case Take:
+			case Take, TakeAndStop:
+				parent.children = append(parent.children, field)
 				s.fields = append(s.fields, field)
 				if elemTyp.Kind() == reflect.Struct {
 					structFields = append(structFields, field)
 				}
-			case Hide:
+				if TakeAndStop == p {
+					break L
+				}
+			case Hide, HideAndStop:
 				field.hidden = true
 				s.fields = append(s.fields, field)
 				if elemTyp.Kind() == reflect.Struct {
 					structFields = append(structFields, field)
 				}
-			case SkipOffspring:
+				if HideAndStop == p {
+					break L
+				}
+			case SkipOffspring, SkipOffspringAndStop:
+				parent.children = append(parent.children, field)
 				s.fields = append(s.fields, field)
+				if SkipOffspringAndStop == p {
+					break L
+				}
 			case Skip:
 				continue L
-			case Stop:
+			case SkipAndStop:
 				break L
 			}
 		} else {
+			parent.children = append(parent.children, field)
 			s.fields = append(s.fields, field)
 			if elemTyp.Kind() == reflect.Struct {
 				structFields = append(structFields, field)
@@ -488,6 +541,24 @@ func (s *StructType) groupBy(fn GroupByFunc) {
 			s.fieldGroup[group] = append(a, field)
 		}
 	}
+}
+
+// FieldTree return the field tree.
+//go:nosplit
+func (s *StructType) FieldTree() []*FieldType {
+	return s.tree.children
+}
+
+// Parent return the parent field.
+//go:nosplit
+func (f *FieldType) Parent() *FieldType {
+	return f.parent
+}
+
+// Children return the child fields.
+//go:nosplit
+func (f *FieldType) Children() []*FieldType {
+	return f.children
 }
 
 //go:nosplit
