@@ -12,9 +12,10 @@ import (
 type (
 	// Accessor struct accessor factory
 	Accessor struct {
-		dict      map[int32]*StructType // key is runtime type ID
-		rw        sync.RWMutex
-		groupFunc FieldGroupFunc
+		dict     map[int32]*StructType // key is runtime type ID
+		rw       sync.RWMutex
+		groupBy  FieldGroupBy
+		iterator FieldIterator
 	}
 	// Struct struct accessor
 	Struct struct {
@@ -47,26 +48,51 @@ type (
 		elemVal reflect.Value
 		elemPtr uintptr
 	}
-	// FieldGroupFunc create the group of the field type
-	FieldGroupFunc func(*FieldType) (string, bool)
 	// Option accessor option
 	Option func(*Accessor)
+	// FieldGroupBy create the group of the field type
+	FieldGroupBy func(*FieldType) (string, bool)
+	// FieldIterator determine whether the field needs to be iterated.
+	FieldIterator func(*FieldType) IterPolicy
+	// IterPolicy iteration policy
+	IterPolicy int8
+)
+
+const (
+	// NoSkip accept the field
+	NoSkip IterPolicy = iota
+	// SkipSelf skip the field, but not skip its subfields
+	SkipSelf
+	// SkipOffspring accept the field, but skip its subfields
+	SkipOffspring
+	// Skip skip the field and its subfields
+	Skip
+	// Stop stop iteration
+	Stop
 )
 
 const maxFieldDeep = 16
 
 var (
-	defaultGofield  = New()
+	defaultAccessor = New()
 	zero            = reflect.Value{}
 	errTypeMismatch = errors.New("type mismatch")
 	errIllegalType  = errors.New("type is not struct pointer")
 )
 
-// WithGroupBy set FieldGroupFunc to *Accessor.
+// WithGroupBy set FieldGroupBy to *Accessor.
 //go:nosplit
-func WithGroupBy(fn FieldGroupFunc) Option {
+func WithGroupBy(fn FieldGroupBy) Option {
 	return func(a *Accessor) {
-		a.groupFunc = fn
+		a.groupBy = fn
+	}
+}
+
+// WithIterator set FieldIterator to *Accessor.
+//go:nosplit
+func WithIterator(fn FieldIterator) Option {
+	return func(a *Accessor) {
+		a.iterator = fn
 	}
 }
 
@@ -102,7 +128,7 @@ func (a *Accessor) store(sTyp *StructType) {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func MustAnalyze(structPtr interface{}) *StructType {
-	return defaultGofield.MustAnalyze(structPtr)
+	return defaultAccessor.MustAnalyze(structPtr)
 }
 
 // MustAnalyze analyze the struct and return its type info.
@@ -120,7 +146,7 @@ func (a *Accessor) MustAnalyze(structPtr interface{}) *StructType {
 // Analyze analyze the struct and return its type info.
 //go:nosplit
 func Analyze(structPtr interface{}) (*StructType, error) {
-	return defaultGofield.Analyze(structPtr)
+	return defaultAccessor.Analyze(structPtr)
 }
 
 // Analyze analyze the struct and return its type info.
@@ -148,7 +174,7 @@ func (a *Accessor) analyze(tid int32, structPtr interface{}) *StructType {
 //  If structPtr is not a struct pointer, it will cause panic.
 //go:nosplit
 func MustAccess(structPtr interface{}) *Struct {
-	return defaultGofield.MustAccess(structPtr)
+	return defaultAccessor.MustAccess(structPtr)
 }
 
 // MustAccess analyze the struct type info and create struct accessor.
@@ -168,7 +194,7 @@ func (a *Accessor) MustAccess(structPtr interface{}) *Struct {
 // Access analyze the struct type info and create struct accessor.
 //go:nosplit
 func Access(structPtr interface{}) (*Struct, error) {
-	return defaultGofield.Access(structPtr)
+	return defaultAccessor.Access(structPtr)
 }
 
 // Access analyze the struct type info and create struct accessor.
@@ -246,6 +272,18 @@ func (s *StructType) FieldType(id int) *FieldType {
 	return s.fields[id]
 }
 
+// Filter filter all fields and return a list of their ids.
+//go:nosplit
+func (s *StructType) Filter(fn func(*FieldType) bool) []int {
+	list := make([]int, 0, s.NumField())
+	for id, field := range s.fields {
+		if fn(field) {
+			list = append(list, id)
+		}
+	}
+	return list
+}
+
 // FieldValue get the field value corresponding to the id.
 //go:nosplit
 func (s *Struct) FieldValue(id int) reflect.Value {
@@ -273,6 +311,23 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 	return t, t.init(s).elemVal
 }
 
+// Range traverse all fields, and exit the traversal when fn returns false.
+//go:nosplit
+func (s *Struct) Range(fn func(*FieldType, reflect.Value) bool) {
+	for id, t := range s.fields {
+		v := s.fieldValues[id]
+		if v.elemPtr > 0 {
+			if !fn(t, v.elemVal) {
+				return
+			}
+		} else {
+			if !fn(t, t.init(s).elemVal) {
+				return
+			}
+		}
+	}
+}
+
 // GroupTypes return the field types by group.
 //go:nosplit
 func (s *StructType) GroupTypes(group string) []*FieldType {
@@ -294,18 +349,6 @@ func (s *Struct) GroupValues(group string) []reflect.Value {
 		}
 	}
 	return r
-}
-
-// Filter filter all fields and return a list of their ids.
-//go:nosplit
-func (s *StructType) Filter(fn func(*FieldType) bool) []int {
-	list := make([]int, 0, s.NumField())
-	for id, field := range s.fields {
-		if fn(field) {
-			list = append(list, id)
-		}
-	}
-	return list
 }
 
 //go:nosplit
@@ -392,22 +435,22 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 		elemType: structTyp,
 		fields:   make([]*FieldType, 0, 16),
 	}
-	sTyp.parseFields(&FieldType{}, structTyp)
-	if a.groupFunc != nil {
-		sTyp.groupBy(a.groupFunc)
+	sTyp.traversalFields(a.iterator, &FieldType{elemTyp: structTyp})
+	if a.groupBy != nil {
+		sTyp.groupBy(a.groupBy)
 	}
 	return sTyp
 }
 
-func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
+func (s *StructType) traversalFields(iterator FieldIterator, parent *FieldType) {
 	if s.depth >= maxFieldDeep {
 		return
 	}
 	s.depth++
-	baseId := len(s.fields)
+	structTyp := parent.elemTyp
 	numField := structTyp.NumField()
-	s.fields = append(s.fields, make([]*FieldType, numField)...)
-
+	var structFields []*FieldType
+L:
 	for i := 0; i < numField; i++ {
 		f := structTyp.Field(i)
 		elemTyp := f.Type
@@ -418,22 +461,47 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 		}
 		field := &FieldType{
 			parent:      parent,
-			id:          baseId + i, // 0, 1, 2, ...
+			id:          len(s.fields), // 0, 1, 2, ...
 			selector:    joinFieldName(parent.selector, f.Name),
 			deep:        s.depth,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
 			StructField: f,
 		}
-		s.fields[field.id] = field
-		if elemTyp.Kind() == reflect.Struct {
-			s.parseFields(field, elemTyp)
+		if iterator != nil {
+			switch iterator(field) {
+			default:
+				fallthrough
+			case NoSkip:
+				s.fields = append(s.fields, field)
+				if elemTyp.Kind() == reflect.Struct {
+					structFields = append(structFields, field)
+				}
+			case SkipSelf:
+				if elemTyp.Kind() == reflect.Struct {
+					structFields = append(structFields, field)
+				}
+			case SkipOffspring:
+				s.fields = append(s.fields, field)
+			case Skip:
+				continue L
+			case Stop:
+				break L
+			}
+		} else {
+			s.fields = append(s.fields, field)
+			if elemTyp.Kind() == reflect.Struct {
+				structFields = append(structFields, field)
+			}
 		}
+	}
+	for _, field := range structFields {
+		s.traversalFields(iterator, field)
 	}
 }
 
 //go:nosplit
-func (s *StructType) groupBy(fn FieldGroupFunc) {
+func (s *StructType) groupBy(fn FieldGroupBy) {
 	s.fieldGroup = make(map[string][]*FieldType, len(s.fields))
 	for _, field := range s.fields {
 		group, ok := fn(field)

@@ -118,6 +118,33 @@ func TestGofield3(t *testing.T) {
 	assert.Equal(t, 999, **p.g)
 }
 
+func TestGofield4(t *testing.T) {
+	accessor := gofield.New(gofield.WithIterator(func(ft *gofield.FieldType) gofield.IterPolicy {
+		if ft.Name == "P3" {
+			return gofield.Stop
+		}
+		switch ft.UnderlyingKind() {
+		case reflect.Int:
+			return gofield.NoSkip
+		case reflect.Struct:
+			return gofield.SkipSelf
+		default:
+			return gofield.Skip
+		}
+	}))
+	var p P1
+	s := accessor.MustAccess(reflect.ValueOf(&p))
+	s.Range(func(t *gofield.FieldType, v reflect.Value) bool {
+		v.SetInt(int64(t.ID() + 1))
+		return true
+	})
+	assert.Equal(t, 4, s.NumField())
+	assert.Equal(t, 1, p.A)
+	assert.Equal(t, 2, p.b)
+	assert.Equal(t, 3, p.C)
+	assert.Equal(t, 4, *p.d)
+}
+
 func BenchmarkGofield1(b *testing.B) {
 	b.ReportAllocs()
 	var p P1
