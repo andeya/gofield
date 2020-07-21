@@ -205,29 +205,6 @@ func (s *StructType) Access(structPtr interface{}) (*Struct, error) {
 	return newStruct(s, ptr), nil
 }
 
-// GroupValues return the field values by group.
-//go:nosplit
-func (s *Struct) GroupValues(group string) []reflect.Value {
-	a := s.StructType.GroupTypes(group)
-	r := make([]reflect.Value, len(a))
-	for i, ft := range a {
-		v := s.fieldValues[ft.id]
-		if v.elemPtr > 0 {
-			r[i] = v.elemVal
-		} else {
-			r[i] = ft.init(s).elemVal
-		}
-	}
-	return r
-}
-
-// GroupTypes return the field types by group.
-//go:nosplit
-func (s *StructType) GroupTypes(group string) []*FieldType {
-	a := s.fieldGroup[group]
-	return a
-}
-
 //go:nosplit
 func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 	return &Struct{
@@ -237,6 +214,12 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 		},
 		fieldValues: make([]Value, len(typ.fields)),
 	}
+}
+
+// Depth return the struct nesting depth(at least 1).
+//go:nosplit
+func (s *StructType) Depth() int {
+	return s.deep
 }
 
 // RuntimeTypeID get the runtime type id of struct.
@@ -285,6 +268,29 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 		return t, v.elemVal
 	}
 	return t, t.init(s).elemVal
+}
+
+// GroupTypes return the field types by group.
+//go:nosplit
+func (s *StructType) GroupTypes(group string) []*FieldType {
+	a := s.fieldGroup[group]
+	return a
+}
+
+// GroupValues return the field values by group.
+//go:nosplit
+func (s *Struct) GroupValues(group string) []reflect.Value {
+	a := s.StructType.GroupTypes(group)
+	r := make([]reflect.Value, len(a))
+	for i, ft := range a {
+		v := s.fieldValues[ft.id]
+		if v.elemPtr > 0 {
+			r[i] = v.elemVal
+		} else {
+			r[i] = ft.init(s).elemVal
+		}
+	}
+	return r
 }
 
 // Filter filter all fields and return a list of their ids.
@@ -388,6 +394,7 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 	if s.deep >= maxFieldDeep {
 		return
 	}
+	s.deep++
 	baseId := len(s.fields)
 	numField := structTyp.NumField()
 	s.fields = append(s.fields, make([]*FieldType, numField)...)

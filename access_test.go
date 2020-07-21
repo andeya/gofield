@@ -48,6 +48,7 @@ func TestGofield1(t *testing.T) {
 		v.SetInt(999)
 	}
 	assert.Equal(t, 9, s.NumField())
+	assert.Equal(t, 3, s.Depth())
 	assert.Equal(t, 2, p.b)
 	assert.Equal(t, 1, p.A)
 	assert.Equal(t, 4, p.C)
