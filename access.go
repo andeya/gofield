@@ -14,8 +14,8 @@ type (
 	Accessor struct {
 		dict     map[int32]*StructType // key is runtime type ID
 		rw       sync.RWMutex
-		groupBy  FieldGroupBy
-		iterator FieldIterator
+		groupBy  GroupByFunc
+		iterator IteratorFunc
 	}
 	// Struct struct accessor
 	Struct struct {
@@ -48,27 +48,6 @@ type (
 		elemVal reflect.Value
 		elemPtr uintptr
 	}
-	// Option accessor option
-	Option func(*Accessor)
-	// FieldGroupBy create the group of the field type
-	FieldGroupBy func(*FieldType) (string, bool)
-	// FieldIterator determine whether the field needs to be iterated.
-	FieldIterator func(*FieldType) IterPolicy
-	// IterPolicy iteration policy
-	IterPolicy int8
-)
-
-const (
-	// NoSkip accept the field
-	NoSkip IterPolicy = iota
-	// SkipSelf skip the field, but not skip its subfields
-	SkipSelf
-	// SkipOffspring accept the field, but skip its subfields
-	SkipOffspring
-	// Skip skip the field and its subfields
-	Skip
-	// Stop stop iteration
-	Stop
 )
 
 const maxFieldDeep = 16
@@ -79,22 +58,6 @@ var (
 	errTypeMismatch = errors.New("type mismatch")
 	errIllegalType  = errors.New("type is not struct pointer")
 )
-
-// WithGroupBy set FieldGroupBy to *Accessor.
-//go:nosplit
-func WithGroupBy(fn FieldGroupBy) Option {
-	return func(a *Accessor) {
-		a.groupBy = fn
-	}
-}
-
-// WithIterator set FieldIterator to *Accessor.
-//go:nosplit
-func WithIterator(fn FieldIterator) Option {
-	return func(a *Accessor) {
-		a.iterator = fn
-	}
-}
 
 // New create a new struct accessor factory.
 //go:nosplit
@@ -442,7 +405,7 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 	return sTyp
 }
 
-func (s *StructType) traversalFields(iterator FieldIterator, parent *FieldType) {
+func (s *StructType) traversalFields(iterator IteratorFunc, parent *FieldType) {
 	if s.depth >= maxFieldDeep {
 		return
 	}
@@ -501,7 +464,7 @@ L:
 }
 
 //go:nosplit
-func (s *StructType) groupBy(fn FieldGroupBy) {
+func (s *StructType) groupBy(fn GroupByFunc) {
 	s.fieldGroup = make(map[string][]*FieldType, len(s.fields))
 	for _, field := range s.fields {
 		group, ok := fn(field)
