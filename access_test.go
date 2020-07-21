@@ -125,7 +125,7 @@ func TestGofield4(t *testing.T) {
 		}
 		switch ft.UnderlyingKind() {
 		case reflect.Int:
-			return gofield.NoSkip
+			return gofield.Take
 		case reflect.Struct:
 			return gofield.SkipSelf
 		default:

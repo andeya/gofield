@@ -435,7 +435,7 @@ L:
 			switch iterator(field) {
 			default:
 				fallthrough
-			case NoSkip:
+			case Take:
 				s.fields = append(s.fields, field)
 				if elemTyp.Kind() == reflect.Struct {
 					structFields = append(structFields, field)

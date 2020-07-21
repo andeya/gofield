@@ -12,8 +12,8 @@ type (
 )
 
 const (
-	// NoSkip accept the field
-	NoSkip IterPolicy = iota
+	// Take take the field
+	Take IterPolicy = iota
 	// SkipSelf skip the field, but not skip its subfields
 	SkipSelf
 	// SkipOffspring accept the field, but skip its subfields
