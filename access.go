@@ -12,8 +12,8 @@ import (
 type (
 	// Accessor struct accessor factory
 	Accessor struct {
-		dict map[int32]*StructType // key is runtime type ID
-		sync.RWMutex
+		dict      map[int32]*StructType // key is runtime type ID
+		rw        sync.RWMutex
 		groupFunc FieldGroupFunc
 	}
 	// Struct struct accessor
@@ -81,17 +81,17 @@ func New(opt ...Option) *Accessor {
 
 //go:nosplit
 func (s *Accessor) load(tid int32) (*StructType, bool) {
-	s.RLock()
+	s.rw.RLock()
 	sTyp, ok := s.dict[tid]
-	s.RUnlock()
+	s.rw.RUnlock()
 	return sTyp, ok
 }
 
 //go:nosplit
 func (s *Accessor) store(sTyp *StructType) {
-	s.Lock()
+	s.rw.Lock()
 	s.dict[sTyp.tid] = sTyp
-	s.Unlock()
+	s.rw.Unlock()
 }
 
 // MustAnalyze analyze the struct and return its type info.
