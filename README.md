@@ -1,4 +1,4 @@
-# gofield [![report card](https://goreportcard.com/badge/github.com/henrylee2cn/gofield?style=flat-square)](http://goreportcard.com/report/henrylee2cn/gofield) [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/github.com/henrylee2cn/gofield?tab=doc)
+# gofield [![report card](https://goreportcard.com/badge/github.com/henrylee2cn/gofield?style=flat-square)](http://goreportcard.com/report/henrylee2cn/gofield) [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/henrylee2cn/gofield)
 
 High-performance struct field accessor based on unsafe pointers.
 
