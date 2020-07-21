@@ -14,16 +14,12 @@ type (
 const (
 	// Take take the field
 	Take IterPolicy = iota
-	// Hide does not appear in the range
-	Hide
 	// SkipOffspring take the field, but skip its subfields
 	SkipOffspring
 	// Skip skip the field and its subfields
 	Skip
 	// TakeAndStop take the field and stop iteration
 	TakeAndStop
-	// HideAndStop does not appear in the range and stop iteration
-	HideAndStop
 	// SkipOffspringAndStop take the field, but skip its subfields, and stop iteration
 	SkipOffspringAndStop
 	// SkipAndStop skip the field and its subfields, and stop iteration

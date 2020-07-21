@@ -129,10 +129,8 @@ func TestGofield4(t *testing.T) {
 			return gofield.SkipAndStop
 		}
 		switch ft.UnderlyingKind() {
-		case reflect.Int:
+		case reflect.Int, reflect.Struct:
 			return gofield.Take
-		case reflect.Struct:
-			return gofield.Hide
 		default:
 			return gofield.Skip
 		}
@@ -140,7 +138,9 @@ func TestGofield4(t *testing.T) {
 	var p P1
 	s := accessor.MustAccess(reflect.ValueOf(&p))
 	s.Range(func(t *gofield.FieldType, v reflect.Value) bool {
-		v.SetInt(int64(t.ID() + 1))
+		if t.UnderlyingKind() != reflect.Struct {
+			v.SetInt(int64(t.ID() + 1))
+		}
 		return true
 	})
 	assert.Equal(t, 5, s.NumField())
