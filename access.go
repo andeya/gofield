@@ -28,18 +28,19 @@ type (
 		elemType   reflect.Type
 		fields     []*FieldType
 		fieldGroup map[string][]*FieldType
-		deep       int
+		depth      int
 	}
 	// FieldID id assigned to each field in sequence
 	FieldID = int
 	// FieldType field type info
 	FieldType struct {
+		parent   *FieldType
 		id       int
 		selector string
+		deep     int
+		ptrNum   int
+		elemTyp  reflect.Type
 		reflect.StructField
-		ptrNum  int
-		elemTyp reflect.Type
-		parent  *FieldType
 	}
 	// Value field value
 	Value struct {
@@ -221,7 +222,7 @@ func newStruct(typ *StructType, elemPtr uintptr) *Struct {
 // Depth return the struct nesting depth(at least 1).
 //go:nosplit
 func (s *StructType) Depth() int {
-	return s.deep
+	return s.depth
 }
 
 // RuntimeTypeID get the runtime type id of struct.
@@ -360,6 +361,12 @@ func (f *FieldType) Selector() string {
 	return f.selector
 }
 
+// Deep get the nesting depth of the field.
+//go:nosplit
+func (f *FieldType) Deep() int {
+	return f.deep
+}
+
 // Kind get the field kind.
 //go:nosplit
 func (f *FieldType) Kind() reflect.Kind {
@@ -393,10 +400,10 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 }
 
 func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
-	if s.deep >= maxFieldDeep {
+	if s.depth >= maxFieldDeep {
 		return
 	}
-	s.deep++
+	s.depth++
 	baseId := len(s.fields)
 	numField := structTyp.NumField()
 	s.fields = append(s.fields, make([]*FieldType, numField)...)
@@ -410,12 +417,13 @@ func (s *StructType) parseFields(parent *FieldType, structTyp reflect.Type) {
 			ptrNum++
 		}
 		field := &FieldType{
+			parent:      parent,
 			id:          baseId + i, // 0, 1, 2, ...
 			selector:    joinFieldName(parent.selector, f.Name),
-			StructField: f,
+			deep:        s.depth,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
-			parent:      parent,
+			StructField: f,
 		}
 		s.fields[field.id] = field
 		if elemTyp.Kind() == reflect.Struct {
