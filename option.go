@@ -39,3 +39,10 @@ func WithIterator(fn IteratorFunc) Option {
 		a.iterator = fn
 	}
 }
+
+// WithMaxDeep set the maximum traversal depth.
+func WithMaxDeep(maxDeep int) Option {
+	return func(a *Accessor) {
+		a.maxDeep = maxDeep
+	}
+}

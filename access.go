@@ -16,6 +16,7 @@ type (
 		rw       sync.RWMutex
 		groupBy  GroupByFunc
 		iterator IteratorFunc
+		maxDeep  int
 	}
 	// Struct struct accessor
 	Struct struct {
@@ -51,8 +52,6 @@ type (
 	}
 )
 
-const maxFieldDeep = 16
-
 var (
 	defaultAccessor = New()
 	zero            = reflect.Value{}
@@ -64,7 +63,8 @@ var (
 //go:nosplit
 func New(opt ...Option) *Accessor {
 	a := &Accessor{
-		dict: make(map[int32]*StructType, 1024),
+		dict:    make(map[int32]*StructType, 1024),
+		maxDeep: 16,
 	}
 	for _, fn := range opt {
 		fn(a)
@@ -411,14 +411,14 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 		elemType: structTyp,
 		fields:   make([]*FieldType, 0, 16),
 	}
-	sTyp.traversalFields(a.iterator, &FieldType{elemTyp: structTyp})
+	sTyp.traversalFields(a.maxDeep, a.iterator, &FieldType{elemTyp: structTyp})
 	if a.groupBy != nil {
 		sTyp.groupBy(a.groupBy)
 	}
 	return sTyp
 }
 
-func (s *StructType) traversalFields(iterator IteratorFunc, parent *FieldType) {
+func (s *StructType) traversalFields(maxFieldDeep int, iterator IteratorFunc, parent *FieldType) {
 	if s.depth >= maxFieldDeep {
 		return
 	}
@@ -474,7 +474,7 @@ L:
 		}
 	}
 	for _, field := range structFields {
-		s.traversalFields(iterator, field)
+		s.traversalFields(maxFieldDeep, iterator, field)
 	}
 }
 
