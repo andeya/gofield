@@ -279,37 +279,35 @@ func (s *StructType) checkID(id int) bool {
 }
 
 func (f *FieldType) init(s *Struct, needValue bool) Value {
+	var v Value
 	if f.parent == nil {
 		// the original caller ensures that it has been initialized
-		return Value{elemPtr: s.structPtrs[0]}
+		v.elemPtr = s.structPtrs[0]
+		return v
 	}
 	if f.structID > 0 {
-		elemPtr := s.structPtrs[f.structID]
-		if elemPtr > 0 {
-			v := Value{
-				elemPtr: elemPtr,
-			}
+		v.elemPtr = s.structPtrs[f.structID]
+		if v.elemPtr > 0 {
 			if needValue {
-				v.elemVal = reflect.NewAt(f.elemTyp, unsafe.Pointer(elemPtr)).Elem()
+				v.elemVal = reflect.NewAt(f.elemTyp, unsafe.Pointer(v.elemPtr)).Elem()
 			}
 			return v
 		}
 	}
-	pVal := f.parent.init(s, false)
-	elemPtr := pVal.elemPtr + f.Offset
-	valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(elemPtr))
+	v.elemPtr = f.parent.init(s, false).elemPtr + f.Offset
 	if f.ptrNum > 0 {
+		valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(v.elemPtr))
 		valPtr = derefPtrAndInit(valPtr, f.ptrNum)
-	}
-	elemPtr = valPtr.Pointer()
-	v := Value{
-		elemPtr: elemPtr,
-	}
-	if needValue {
+		v.elemPtr = valPtr.Pointer()
+		if needValue {
+			v.elemVal = valPtr.Elem()
+		}
+	} else if needValue {
+		valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(v.elemPtr))
 		v.elemVal = valPtr.Elem()
 	}
 	if f.structID > 0 {
-		s.structPtrs[f.structID] = elemPtr
+		s.structPtrs[f.structID] = v.elemPtr
 	}
 	return v
 }
