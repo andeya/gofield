@@ -23,8 +23,7 @@ type (
 	// Struct struct accessor
 	Struct struct {
 		*StructType
-		value       Value
-		fieldValues []Value // idx is int
+		structPtrs []uintptr // idx is struct id
 	}
 	// StructType struct type info
 	StructType struct {
@@ -33,12 +32,14 @@ type (
 		fieldGroup map[string][]*FieldType
 		depth      int
 		tree       *FieldType // id = -1
+		structNum  int
 	}
 	// FieldID id assigned to each field in sequence
 	FieldID = int
 	// FieldType field type info
 	FieldType struct {
 		id       int
+		structID int // 1, 2, 3, ...
 		selector string
 		deep     int
 		ptrNum   int
@@ -189,13 +190,12 @@ func (s *StructType) Access(structPtr interface{}) (*Struct, error) {
 }
 
 func newStruct(typ *StructType, elemPtr uintptr) *Struct {
-	return &Struct{
+	s := &Struct{
 		StructType: typ,
-		value: Value{
-			elemPtr: elemPtr,
-		},
-		fieldValues: make([]Value, len(typ.fields)),
+		structPtrs: make([]uintptr, typ.structNum),
 	}
+	s.structPtrs[0] = elemPtr
+	return s
 }
 
 // Depth return the struct nesting depth(at least 1).
@@ -237,11 +237,7 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 	if !s.checkID(id) {
 		return zero
 	}
-	v := s.fieldValues[id]
-	if v.elemPtr > 0 {
-		return v.elemVal
-	}
-	return s.StructType.fields[id].init(s).elemVal
+	return s.StructType.fields[id].init(s, true).elemVal
 }
 
 // Field get the field type and value corresponding to the id.
@@ -250,25 +246,14 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 		return nil, zero
 	}
 	t := s.StructType.fields[id]
-	v := s.fieldValues[id]
-	if v.elemPtr > 0 {
-		return t, v.elemVal
-	}
-	return t, t.init(s).elemVal
+	return t, t.init(s, true).elemVal
 }
 
 // Range traverse all fields, and exit the traversal when fn returns false.
 func (s *Struct) Range(fn func(*FieldType, reflect.Value) bool) {
-	for id, t := range s.fields {
-		v := s.fieldValues[id]
-		if v.elemPtr > 0 {
-			if !fn(t, v.elemVal) {
-				return
-			}
-		} else {
-			if !fn(t, t.init(s).elemVal) {
-				return
-			}
+	for _, t := range s.fields {
+		if !fn(t, t.init(s, true).elemVal) {
+			return
 		}
 	}
 }
@@ -284,12 +269,7 @@ func (s *Struct) GroupValues(group string) []reflect.Value {
 	a := s.StructType.GroupTypes(group)
 	r := make([]reflect.Value, len(a))
 	for i, ft := range a {
-		v := s.fieldValues[ft.id]
-		if v.elemPtr > 0 {
-			r[i] = v.elemVal
-		} else {
-			r[i] = ft.init(s).elemVal
-		}
+		r[i] = ft.init(s, true).elemVal
 	}
 	return r
 }
@@ -298,25 +278,51 @@ func (s *StructType) checkID(id int) bool {
 	return id >= 0 && id < len(s.fields)
 }
 
-func (f *FieldType) init(s *Struct) Value {
+func (f *FieldType) init(s *Struct, needValue bool) Value {
 	if f.parent == nil {
-		return s.value // the original caller ensures that it has been initialized
+		// the original caller ensures that it has been initialized
+		return Value{elemPtr: s.structPtrs[0]}
 	}
-	v := s.fieldValues[f.id]
-	if v.elemPtr > 0 {
+	if f.structID > 0 {
+		elemPtr := s.structPtrs[f.structID]
+		if elemPtr > 0 {
+			if needValue {
+				return Value{
+					elemPtr: elemPtr,
+					elemVal: reflect.NewAt(f.elemTyp, unsafe.Pointer(elemPtr)).Elem(),
+				}
+			}
+			return Value{elemPtr: elemPtr}
+		}
+		pVal := f.parent.init(s, false)
+		ptr := pVal.elemPtr + f.Offset
+		valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(ptr))
+		if f.ptrNum > 0 {
+			valPtr = derefPtrAndInit(valPtr, f.ptrNum)
+		}
+		elemPtr = valPtr.Pointer()
+		s.structPtrs[f.structID] = elemPtr
+		v := Value{
+			elemPtr: elemPtr,
+		}
+		if needValue {
+			v.elemVal = valPtr.Elem()
+		}
 		return v
 	}
-	pVal := f.parent.init(s)
+
+	pVal := f.parent.init(s, false)
 	ptr := pVal.elemPtr + f.Offset
 	valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(ptr))
 	if f.ptrNum > 0 {
 		valPtr = derefPtrAndInit(valPtr, f.ptrNum)
 	}
-	v = Value{
-		elemVal: valPtr.Elem(),
+	v := Value{
 		elemPtr: valPtr.Pointer(),
 	}
-	s.fieldValues[f.id] = v
+	if needValue {
+		v.elemVal = valPtr.Elem()
+	}
 	return v
 }
 
@@ -402,14 +408,16 @@ func (a *Accessor) newStructType(tid int32, structPtr interface{}) *StructType {
 		fields: make([]*FieldType, 0, 16),
 		tree:   &FieldType{id: rootID, elemTyp: structTyp},
 	}
-	sTyp.traversalFields(a.maxDeep, a.iterator, sTyp.tree)
+	var structID int
+	sTyp.traversalFields(&structID, a.maxDeep, a.iterator, sTyp.tree)
+	sTyp.structNum = structID + 1
 	if a.groupBy != nil {
 		sTyp.groupBy(a.groupBy)
 	}
 	return sTyp
 }
 
-func (s *StructType) traversalFields(maxFieldDeep int, iterator IteratorFunc, parent *FieldType) {
+func (s *StructType) traversalFields(structID *int, maxFieldDeep int, iterator IteratorFunc, parent *FieldType) {
 	if s.depth >= maxFieldDeep {
 		return
 	}
@@ -435,6 +443,11 @@ L:
 			elemTyp:     elemTyp,
 			StructField: f,
 		}
+		isStruct := elemTyp.Kind() == reflect.Struct
+		if isStruct {
+			*structID++
+			field.structID = *structID
+		}
 		if iterator != nil {
 			switch p := iterator(field); p {
 			default:
@@ -442,7 +455,7 @@ L:
 			case Take, TakeAndStop:
 				parent.children = append(parent.children, field)
 				s.fields = append(s.fields, field)
-				if elemTyp.Kind() == reflect.Struct {
+				if isStruct {
 					structFields = append(structFields, field)
 				}
 				if TakeAndStop == p {
@@ -462,13 +475,13 @@ L:
 		} else {
 			parent.children = append(parent.children, field)
 			s.fields = append(s.fields, field)
-			if elemTyp.Kind() == reflect.Struct {
+			if isStruct {
 				structFields = append(structFields, field)
 			}
 		}
 	}
 	for _, field := range structFields {
-		s.traversalFields(maxFieldDeep, iterator, field)
+		s.traversalFields(structID, maxFieldDeep, iterator, field)
 	}
 }
 
