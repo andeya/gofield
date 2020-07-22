@@ -44,6 +44,8 @@ type (
 		deep     int
 		ptrNum   int
 		elemTyp  reflect.Type
+		elemVal  reflectValue
+		rawVal   reflectValue
 		parent   *FieldType
 		children []*FieldType
 		reflect.StructField
@@ -289,22 +291,31 @@ func (f *FieldType) init(s *Struct, needValue bool) Value {
 		v.elemPtr = s.structPtrs[f.structID]
 		if v.elemPtr > 0 {
 			if needValue {
-				v.elemVal = reflect.NewAt(f.elemTyp, unsafe.Pointer(v.elemPtr)).Elem()
+				elemVal := f.elemVal
+				elemVal.ptr = unsafe.Pointer(v.elemPtr)
+				v.elemVal = (*(*reflect.Value)(unsafe.Pointer(&elemVal))).Elem()
+				// v.elemVal = reflect.NewAt(f.elemTyp, unsafe.Pointer(v.elemPtr)).Elem()
 			}
 			return v
 		}
 	}
 	v.elemPtr = f.parent.init(s, false).elemPtr + f.Offset
 	if f.ptrNum > 0 {
-		valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(v.elemPtr))
+		rawVal := f.rawVal
+		rawVal.ptr = unsafe.Pointer(v.elemPtr)
+		valPtr := *(*reflect.Value)(unsafe.Pointer(&rawVal))
+		// valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(v.elemPtr))
 		valPtr = derefPtrAndInit(valPtr, f.ptrNum)
 		v.elemPtr = valPtr.Pointer()
 		if needValue {
 			v.elemVal = valPtr.Elem()
 		}
 	} else if needValue {
-		valPtr := reflect.NewAt(f.StructField.Type, unsafe.Pointer(v.elemPtr))
-		v.elemVal = valPtr.Elem()
+		elemVal := f.elemVal
+		elemVal.ptr = unsafe.Pointer(v.elemPtr)
+		v.elemVal = (*(*reflect.Value)(unsafe.Pointer(&elemVal))).Elem()
+		// valPtr := reflect.NewAt(f.elemTyp, unsafe.Pointer(v.elemPtr))
+		// v.elemVal = valPtr.Elem()
 	}
 	if f.structID > 0 {
 		s.structPtrs[f.structID] = v.elemPtr
@@ -420,6 +431,10 @@ L:
 			elemTyp = elemTyp.Elem()
 			ptrNum++
 		}
+		_ = reflect.PtrTo(elemTyp)
+		_ = reflect.PtrTo(f.Type)
+		elemVal := reflect.New(elemTyp)
+		rawVal := reflect.New(f.Type)
 		field := &FieldType{
 			parent:      parent,
 			id:          len(s.fields), // 0, 1, 2, ...
@@ -427,6 +442,8 @@ L:
 			deep:        s.depth,
 			ptrNum:      ptrNum,
 			elemTyp:     elemTyp,
+			elemVal:     *(*reflectValue)(unsafe.Pointer(&elemVal)),
+			rawVal:      *(*reflectValue)(unsafe.Pointer(&rawVal)),
 			StructField: f,
 		}
 		isStruct := elemTyp.Kind() == reflect.Struct
