@@ -27,7 +27,6 @@ const (
 )
 
 // WithGroupBy set GroupByFunc to *Accessor.
-//go:nosplit
 func WithGroupBy(fn GroupByFunc) Option {
 	return func(a *Accessor) {
 		a.groupBy = fn
@@ -35,7 +34,6 @@ func WithGroupBy(fn GroupByFunc) Option {
 }
 
 // WithIterator set IteratorFunc to *Accessor.
-//go:nosplit
 func WithIterator(fn IteratorFunc) Option {
 	return func(a *Accessor) {
 		a.iterator = fn
@@ -43,7 +41,6 @@ func WithIterator(fn IteratorFunc) Option {
 }
 
 // WithMaxDeep set the maximum traversal depth.
-//go:nosplit
 func WithMaxDeep(maxDeep int) Option {
 	return func(a *Accessor) {
 		a.maxDeep = maxDeep
