@@ -150,7 +150,7 @@ func TestGofield4(t *testing.T) {
 	assert.Equal(t, 5, *p.d)
 }
 
-func BenchmarkGofield1(b *testing.B) {
+func BenchmarkNested_Gofield1(b *testing.B) {
 	b.ReportAllocs()
 	var p P1
 	s := gofield.MustAccess(&p)
@@ -163,6 +163,8 @@ func BenchmarkGofield1(b *testing.B) {
 			v := s.FieldValue(id)
 			v.SetInt(int64(id + 1))
 		}
+		var p P1
+		s = gofield.MustAccess(&p)
 	}
 	b.StopTimer()
 
@@ -176,7 +178,7 @@ func BenchmarkGofield1(b *testing.B) {
 	assert.Equal(b, 9, **p.g)
 }
 
-func BenchmarkReflect1(b *testing.B) {
+func BenchmarkNested_Reflect1(b *testing.B) {
 	b.ReportAllocs()
 	var valInt = 1
 	var setVal func(v reflect.Value)
@@ -216,6 +218,8 @@ func BenchmarkReflect1(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		valInt = 1
 		setVal(s.Elem())
+		var p P1
+		s = reflect.ValueOf(&p)
 	}
 	b.StopTimer()
 
