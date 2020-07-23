@@ -239,7 +239,7 @@ func (s *Struct) FieldValue(id int) reflect.Value {
 	if !s.checkID(id) {
 		return zero
 	}
-	return s.StructType.fields[id].init(s, true).elemVal
+	return s.getOrInit(s.StructType.fields[id], true).elemVal
 }
 
 // Field get the field type and value corresponding to the id.
@@ -248,13 +248,13 @@ func (s *Struct) Field(id int) (*FieldType, reflect.Value) {
 		return nil, zero
 	}
 	t := s.StructType.fields[id]
-	return t, t.init(s, true).elemVal
+	return t, s.getOrInit(t, true).elemVal
 }
 
 // Range traverse all fields, and exit the traversal when fn returns false.
 func (s *Struct) Range(fn func(*FieldType, reflect.Value) bool) {
 	for _, t := range s.fields {
-		if !fn(t, t.init(s, true).elemVal) {
+		if !fn(t, s.getOrInit(t, true).elemVal) {
 			return
 		}
 	}
@@ -271,7 +271,7 @@ func (s *Struct) GroupValues(group string) []reflect.Value {
 	a := s.StructType.GroupTypes(group)
 	r := make([]reflect.Value, len(a))
 	for i, ft := range a {
-		r[i] = ft.init(s, true).elemVal
+		r[i] = s.getOrInit(ft, true).elemVal
 	}
 	return r
 }
@@ -280,7 +280,7 @@ func (s *StructType) checkID(id int) bool {
 	return id >= 0 && id < len(s.fields)
 }
 
-func (f *FieldType) init(s *Struct, needValue bool) Value {
+func (s *Struct) getOrInit(f *FieldType, needValue bool) Value {
 	var v Value
 	if f.parent == nil {
 		// the original caller ensures that it has been initialized
@@ -299,7 +299,7 @@ func (f *FieldType) init(s *Struct, needValue bool) Value {
 			return v
 		}
 	}
-	v.elemPtr = f.parent.init(s, false).elemPtr + f.Offset
+	v.elemPtr = s.getOrInit(f.parent, false).elemPtr + f.Offset
 	if f.ptrNum > 0 {
 		rawVal := f.rawVal
 		rawVal.ptr = unsafe.Pointer(v.elemPtr)
