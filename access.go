@@ -215,6 +215,10 @@ func (s *StructType) NumField() int {
 	return len(s.fields)
 }
 
+func (s *StructType) checkID(id int) bool {
+	return id >= 0 && id < len(s.fields)
+}
+
 // FieldType get the field type info corresponding to the id.
 func (s *StructType) FieldType(id int) *FieldType {
 	if !s.checkID(id) {
@@ -274,10 +278,6 @@ func (s *Struct) GroupValues(group string) []reflect.Value {
 		r[i] = s.getOrInit(ft, true).elemVal
 	}
 	return r
-}
-
-func (s *StructType) checkID(id int) bool {
-	return id >= 0 && id < len(s.fields)
 }
 
 func (s *Struct) getOrInit(f *FieldType, needValue bool) Value {
