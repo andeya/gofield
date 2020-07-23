@@ -2,267 +2,76 @@
 
 High-performance struct field accessor based on unsafe pointers.
 
-- `gofield` is **simple** to use and has **three times** the performance of `reflect`
-- The more complex the struct, the more obvious the advantage of `gofield`
+- Compared to `reflect`, it improves performance by two to ten times
+- The more complex the struct, the more obvious the performance advantage
 - Support to operate of non-exported fields
 - Use unsafe and pre-analysis of types to improve performance
+- Very simple operation interface
 
-## Compare1
-
-- benchmark result
-```sh
-goos: darwin
-goarch: amd64
-pkg: github.com/henrylee2cn/gofield
-BenchmarkGofield
-BenchmarkGofield-4   	26278818	        45.6 ns/op	       0 B/op	       0 allocs/op
-BenchmarkReflect
-BenchmarkReflect-4   	 6808384	       180 ns/op	       0 B/op	       0 allocs/op
-PASS
-```
-
-- struct example
+## Example
 
 ```go
-type (
-	P1 struct {
-		A int
+func Example() {
+	type B struct {
 		b int
-		P2
 	}
-	P2 struct {
-		C int
-		d *int
-		*P3
+	type A struct {
+		a string
+		b *B
 	}
-	P3 struct {
-		E int
-		f *int
-		g **int
-	}
-)
-```
-
-- gofield example
-```go
-func BenchmarkGofield(b *testing.B) {
-	b.ReportAllocs()
-	var p P1
-	s := gofield.MustAccess(&p)
-	ids := s.Filter(func(t *gofield.FieldType) bool {
-		return t.UnderlyingKind() == reflect.Int
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for _, id := range ids {
-			v := s.FieldValue(id)
-			v.SetInt(int64(id + 1))
-		}
-	}
-	b.StopTimer()
-
-	assert.Equal(b, 9, s.NumField())
-	assert.Equal(b, 1, p.A)
-	assert.Equal(b, 2, p.b)
-	assert.Equal(b, 4, p.C)
-	assert.Equal(b, 5, *p.d)
-	assert.Equal(b, 7, p.E)
-	assert.Equal(b, 8, *p.f)
-	assert.Equal(b, 9, **p.g)
+	var v A
+	v.a = "x"
+	s := gofield.MustAccess(&v)
+	fmt.Println(s.NumField()) // 3
+	a := s.FieldValue(0)
+	fmt.Println(a.String()) // x
+	a.SetString("y")
+	fmt.Println(a.String()) // y
+	b := s.FieldValue(2)
+	fmt.Println(b.Int()) // 0
+	b.SetInt(1)
+	fmt.Println(b.Int()) // 1
+	// output:
+	// 3
+	// x
+	// y
+	// 0
+	// 1
 }
 ```
 
-- reflect example
-```go
-func BenchmarkReflect(b *testing.B) {
-	b.ReportAllocs()
-	var valInt = 1
-	var setVal func(v reflect.Value)
-	setVal = func(s reflect.Value) {
-		num := s.NumField()
-		for i := 0; i < num; i++ {
-			f := s.Field(i)
-			for f.Kind() == reflect.Ptr {
-				if f.IsNil() {
-					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
-						Elem().Set(reflect.New(f.Type().Elem()))
-				}
-				f = f.Elem()
-				if f.Kind() == reflect.Ptr && f.IsNil() {
-					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr()))
-				}
-			}
-			switch f.Kind() {
-			case reflect.Int:
-				if f.CanSet() {
-					f.SetInt(int64(valInt))
-				} else {
-					reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).
-						Elem().SetInt(int64(valInt))
-				}
-				valInt++
-			case reflect.Struct:
-				valInt++
-				setVal(f)
-			}
-		}
-	}
-	var p P1
-	s := reflect.ValueOf(&p)
+## Benchmark
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		valInt = 1
-		setVal(s.Elem())
-	}
-	b.StopTimer()
+- Various
 
-	assert.Equal(b, 3, s.Elem().NumField())
-	assert.Equal(b, 1, p.A)
-	assert.Equal(b, 2, p.b)
-	assert.Equal(b, 4, p.C)
-	assert.Equal(b, 5, *p.d)
-	assert.Equal(b, 7, p.E)
-	assert.Equal(b, 8, *p.f)
-	assert.Equal(b, 9, **p.g)
-}
-```
-
-## Compare2
-
-- benchmark result
 ```sh
 goos: darwin
 goarch: amd64
 pkg: github.com/henrylee2cn/gofield
-BenchmarkTag_Gofield1-4          1310958               884 ns/op             608 B/op          7 allocs/op
-BenchmarkTag_Reflect1-4           213937              5381 ns/op             856 B/op         53 allocs/op
+BenchmarkTag_Gofield1
+BenchmarkTag_Gofield1-4      	 1952533	       579 ns/op	     296 B/op	       7 allocs/op
+BenchmarkTag_Reflect1
+BenchmarkTag_Reflect1-4      	  246312	      4629 ns/op	     856 B/op	      53 allocs/op
+BenchmarkNested_Gofield2
+BenchmarkNested_Gofield2-4       1703742	       810 ns/op	     176 B/op	       8 allocs/op
+BenchmarkNested_Reflect2
+BenchmarkNested_Reflect2-4       468402	           2443 ns/op	     288 B/op	      26 allocs/op
+BenchmarkNested_Gofield1
+BenchmarkNested_Gofield1-4   	 1570126	       598 ns/op	     176 B/op	       8 allocs/op
+BenchmarkNested_Reflect1
+BenchmarkNested_Reflect1-4   	 1493688	       814 ns/op	     112 B/op	       6 allocs/op
 PASS
 ```
 
-- struct example
+- Overall
 
-```go
-type G struct {
-	Apple  string `mapper:"a"`
-	banana int    `mapper:"b"`
-	C      string `mapper:"c"`
-	D      string `mapper:"d"`
-	E      string `mapper:"e"`
-	E2     string `mapper:"e"`
-	E3     string `mapper:"e"`
-	E4     string `mapper:"e"`
-	E5     string `mapper:"e"`
-}
-```
+```sh
+name          reflect time/op      gofield time/op       delta
+overall-4     2.52µs ±96%          0.66µs ±11%  -73.96%  (p=0.000 n=90+88)
 
-- gofield example
-```go
-func BenchmarkTag_Gofield1(b *testing.B) {
-	b.ReportAllocs()
+name          reflect alloc/op     gofield alloc/op      delta
+overall-4     419B ±104%           216B ±37%     ~       (p=0.186 n=90+90)
 
-	maker := func(ft *gofield.FieldType) (string, bool) {
-		return ft.Tag.Lookup("mapper")
-	}
-	accessor := gofield.New(gofield.WithGroupBy(maker))
-
-	var p G
-	p.Apple = "red"
-	p.banana = 7
-	s := accessor.MustAccess(&p)
-	assert.Equal(b, "red", s.GroupValues("a")[0].String())
-	assert.Equal(b, 7, int(s.GroupValues("b")[0].Int()))
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		s = accessor.MustAccess(&p)
-		a := s.GroupValues("a")
-		for _, value := range a {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		b := s.GroupValues("b")
-		for _, value := range b {
-			_ = value.Int()
-		}
-		c := s.GroupValues("c")
-		for _, value := range c {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		d := s.GroupValues("d")
-		for _, value := range d {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		e := s.GroupValues("e")
-		for _, value := range e {
-			_ = value.String()
-			value.SetString("a1")
-		}
-	}
-	b.StopTimer()
-}
-```
-
-- reflect example
-```go
-func BenchmarkTag_Reflect1(b *testing.B) {
-	b.ReportAllocs()
-	var get func(tagName string, i interface{}) []reflect.Value
-	get = func(tagName string, i interface{}) []reflect.Value {
-		var r []reflect.Value
-		val := reflect.ValueOf(i)
-		for val.Kind() == reflect.Ptr {
-			val = val.Elem()
-		}
-		if val.Kind() != reflect.Struct {
-			panic("")
-		}
-		typ := val.Type()
-		mum := typ.NumField()
-		for i := 0; i < mum; i++ {
-			ft := typ.Field(i)
-			if ft.Tag.Get("mapper") == tagName {
-				r = append(r, val.Field(i))
-			}
-		}
-		return r
-	}
-
-	var p G
-	p.Apple = "red"
-	p.banana = 7
-	assert.Equal(b, "red", get("a", &p)[0].String())
-	assert.Equal(b, 7, int(get("b", &p)[0].Int()))
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		a := get("a", &p)
-		for _, value := range a {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		b := get("b", &p)
-		for _, value := range b {
-			_ = value.Int()
-		}
-		c := get("c", &p)
-		for _, value := range c {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		d := get("d", &p)
-		for _, value := range d {
-			_ = value.String()
-			value.SetString("a1")
-		}
-		e := get("e", &p)
-		for _, value := range e {
-			_ = value.String()
-			value.SetString("a1")
-		}
-	}
-	b.StopTimer()
-}
+name          reflect allocs/op    gofield allocs/op     delta
+overall-4     28.3 ±87%            7.7 ± 9%  -72.94%     (p=0.000 n=90+90)
 ```
