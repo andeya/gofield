@@ -1,9 +1,25 @@
+// Copyright 2020 Henry Lee. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gofield
 
 import (
 	"errors"
 	"reflect"
 	"sync"
+
+	"github.com/henrylee2cn/ameda"
 )
 
 type (
@@ -129,4 +145,34 @@ func (a *Accessor) store(sTyp *StructType) {
 	a.rw.Lock()
 	a.dict[sTyp.tid] = sTyp
 	a.rw.Unlock()
+}
+
+func parseStructInfo(structPtr interface{}) (int32, uintptr) {
+	if val, ok := structPtr.(reflect.Value); ok {
+		tid := ameda.RuntimeTypeIDOf(structPtr)
+		ptr := val.Pointer()
+		return tid, ptr
+	}
+	val := ameda.ValueOf(structPtr)
+	tid := val.RuntimeTypeID()
+	ptr := val.Pointer()
+	return tid, ptr
+}
+
+func parseStructInfoWithCheck(structPtr interface{}) (int32, uintptr, error) {
+	if val, ok := structPtr.(reflect.Value); ok {
+		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+			return 0, 0, errIllegalType
+		}
+		tid := ameda.RuntimeTypeIDOf(structPtr)
+		ptr := val.Pointer()
+		return tid, ptr, nil
+	}
+	val := ameda.ValueOf(structPtr)
+	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+		return 0, 0, errIllegalType
+	}
+	tid := val.RuntimeTypeID()
+	ptr := val.Pointer()
+	return tid, ptr, nil
 }
